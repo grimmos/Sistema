@@ -2860,6 +2860,176 @@ function RulerLayer({ camera, cellSize, width, height }) {
   );
 }
 
+// ── RulerGMLayer - Régua avançada para o Mestre ──
+function RulerGMLayer({ camera, cellSize, width, height, isGM }) {
+  const refH = useRef(null), refV = useRef(null), refInfo = useRef(null);
+  const rulerSize = 28;
+  const [mousePos, setMousePos] = useState({ x: -1, y: -1 });
+  
+  useEffect(() => {
+    if(!isGM) return;
+    const handleMouseMove = (e) => {
+      const container = document.querySelector('[data-vtt-container]');
+      if(!container) return;
+      const rect = container.getBoundingClientRect();
+      setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [isGM]);
+  
+  useEffect(() => {
+    if(!isGM) return;
+    const cvH = refH.current; if(!cvH) return;
+    const ctx = cvH.getContext("2d");
+    if(!ctx || width <= 0 || rulerSize <= 0) return;
+    
+    try {
+      ctx.clearRect(0,0,width,rulerSize);
+      ctx.fillStyle = "#d4af37";
+      ctx.fillRect(0,0,width,rulerSize);
+      ctx.strokeStyle = "#8b6914";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0,rulerSize-1);
+      ctx.lineTo(width,rulerSize-1);
+      ctx.stroke();
+      
+      const sc = cellSize * camera.scale;
+      if(sc < 8) return;
+      
+      const ox = ((camera.x%sc)+sc)%sc;
+      const startCell = Math.floor(-camera.x / sc);
+      
+      ctx.fillStyle = "#3d3d3d";
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      
+      for(let x=ox;x<=width;x+=sc){
+        const cell = startCell + Math.round((x - ox)/sc);
+        ctx.beginPath();
+        ctx.strokeStyle = "#8b6914";
+        ctx.lineWidth = 1;
+        
+        if(cell % 5 === 0){
+          ctx.moveTo(x, rulerSize - 12);
+          ctx.lineTo(x, rulerSize);
+          ctx.stroke();
+          ctx.fillText(cell.toString(), x, 4);
+        } else {
+          ctx.lineWidth = 0.5;
+          ctx.moveTo(x, rulerSize - 6);
+          ctx.lineTo(x, rulerSize);
+          ctx.stroke();
+        }
+      }
+      
+      // Indicador de posição do mouse
+      if(mousePos.x >= 0) {
+        ctx.strokeStyle = "#ff4444";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(mousePos.x, rulerSize - 4);
+        ctx.lineTo(mousePos.x, rulerSize);
+        ctx.stroke();
+      }
+    } catch(e) {
+      console.warn("RulerGMLayer horizontal error:", e);
+    }
+  }, [camera, cellSize, width, isGM, mousePos]);
+  
+  useEffect(() => {
+    if(!isGM) return;
+    const cvV = refV.current; if(!cvV) return;
+    const ctx = cvV.getContext("2d");
+    if(!ctx || rulerSize <= 0 || height <= 0) return;
+    
+    try {
+      const adjustedHeight = Math.max(0, height - rulerSize);
+      ctx.clearRect(0,0,rulerSize,adjustedHeight);
+      ctx.fillStyle = "#d4af37";
+      ctx.fillRect(0,0,rulerSize,adjustedHeight);
+      ctx.strokeStyle = "#8b6914";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(rulerSize-1,0);
+      ctx.lineTo(rulerSize-1,adjustedHeight);
+      ctx.stroke();
+      
+      const sc = cellSize * camera.scale;
+      if(sc < 8) return;
+      
+      const oy = ((camera.y%sc)+sc)%sc;
+      const startCell = Math.floor(-camera.y / sc);
+      
+      ctx.fillStyle = "#3d3d3d";
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      
+      for(let y=oy;y<=adjustedHeight;y+=sc){
+        const cell = startCell + Math.round((y - oy)/sc);
+        ctx.beginPath();
+        ctx.strokeStyle = "#8b6914";
+        ctx.lineWidth = 1;
+        
+        if(cell % 5 === 0){
+          ctx.moveTo(rulerSize - 12, y);
+          ctx.lineTo(rulerSize, y);
+          ctx.stroke();
+          ctx.fillText(cell.toString(), rulerSize - 5, y);
+        } else {
+          ctx.lineWidth = 0.5;
+          ctx.moveTo(rulerSize - 6, y);
+          ctx.lineTo(rulerSize, y);
+          ctx.stroke();
+        }
+      }
+      
+      // Indicador de posição do mouse
+      if(mousePos.y >= rulerSize) {
+        ctx.strokeStyle = "#ff4444";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(rulerSize - 4, mousePos.y - rulerSize);
+        ctx.lineTo(rulerSize, mousePos.y - rulerSize);
+        ctx.stroke();
+      }
+    } catch(e) {
+      console.warn("RulerGMLayer vertical error:", e);
+    }
+  }, [camera, cellSize, height, isGM, mousePos]);
+  
+  useEffect(() => {
+    if(!isGM) return;
+    const inf = refInfo.current; if(!inf) return;
+    
+    try {
+      const sc = cellSize * camera.scale;
+      const gridCol = Math.floor((mousePos.x - camera.x) / sc);
+      const gridRow = Math.floor((mousePos.y - rulerSize - camera.y) / sc);
+      const zoomPercent = Math.round(camera.scale * 100);
+      
+      inf.textContent = `GM • Zoom: ${zoomPercent}% | Grid: (${gridCol}, ${gridRow}) | Scale: ${cellSize}px`;
+    } catch(e) {
+      // Silent fail
+    }
+  }, [camera, cellSize, isGM, mousePos]);
+  
+  if(!isGM) return null;
+  
+  return (
+    <>
+      <canvas ref={refH} width={Math.max(0, width)} height={rulerSize} style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:13 }} />
+      <canvas ref={refV} width={rulerSize} height={Math.max(0, height - rulerSize)} style={{ position:"absolute",top:rulerSize,left:0,pointerEvents:"none",zIndex:13 }} />
+      <div ref={refInfo} style={{ position:"absolute",bottom:12,left:rulerSize+12,fontSize:11,fontFamily:"monospace",color:"#d4af37",background:"rgba(30,30,30,0.8)",padding:"4px 10px",borderRadius:4,pointerEvents:"none",zIndex:14,border:"1px solid #d4af37",textShadow:"0 0 8px rgba(212,175,55,0.3)" }}>
+        GM • Régua Ativa
+      </div>
+    </>
+  );
+}
+
 // ── MapImageLayer ──
 function MapImageLayer({ mapTransform, cellSize, cameraScale, canEdit, onUpdate }) {
   const dragging = useRef(false);
@@ -3408,6 +3578,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
 
       <div style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:15 }}>
         <RulerLayer camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
+        <RulerGMLayer camera={camera} cellSize={cellSize} width={size.width} height={size.height} isGM={permissions.isGM} />
       </div>
 
       <svg style={{ position:"absolute",top:0,left:0,width:size.width,height:size.height,overflow:"visible",pointerEvents: (activeTool === "select") ? "auto" : "none",zIndex:1 }}>
