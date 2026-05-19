@@ -582,10 +582,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
   height: 100%;
 }
 </style>
-<!-- React + Babel para o VTTGrid -->
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
 
@@ -2595,810 +2591,869 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 
-<!-- VTT GRID - React Component -->
-<script type="text/babel" data-presets="react">
+<!-- VTT GRID - Tactical Grid (Konva) -->
+<script>
 (function(){
-const { useState, useRef, useCallback, useEffect } = React;
-
-const CELL_SIZE_DEFAULT = 40;
-const ZOOM_MIN  = 0.25;
-const ZOOM_MAX  = 4;
-const ZOOM_STEP = 0.001;
-const GRID_COLOR_DARK = "#c8c8c8";
-const BG_COLOR_DARK   = "#f0f0f0";
-
-const DRAW_COLORS = [
-  { label:"Branco",   value:"#ffffff" }, { label:"Vermelho", value:"#e05252" },
-  { label:"Laranja",  value:"#e09a3a" }, { label:"Amarelo",  value:"#d4c84a" },
-  { label:"Verde",    value:"#52c47a" }, { label:"Ciano",    value:"#4ac4c4" },
-  { label:"Azul",     value:"#5278e0" }, { label:"Roxo",     value:"#9a52e0" },
-  { label:"Rosa",     value:"#e052b4" }, { label:"Preto",    value:"#1a1a1a" },
-];
-const BRUSH_SIZES    = [2, 4, 8, 14, 22];
-const MAP_DEFAULT_CELLS = 20;
-const FOG_BRUSH_CELLS   = [1, 2, 3, 5];
-
-function useRole(role) {
-  const isGM = role === "GM";
-  return { isGM, canEdit:isGM, canDraw:isGM, canFog:isGM };
-}
-
-// ── Camera: wheel nativo (passive:false) para zoom funcionar no Chrome ──
-function useCamera(containerRef, isPanModeRef, setCursorStyle) {
-  const [camera, setCamera] = useState({ x:0, y:0, scale:1 });
-  const isPanning  = useRef(false);
-  const lastMouse  = useRef({ x:0, y:0 });
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const handler = (e) => {
-      e.preventDefault();
-      setCamera((cam) => {
-        const delta     = -e.deltaY * ZOOM_STEP;
-        const nextScale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, cam.scale + delta * cam.scale));
-        const rect = el.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
-        const ratio = nextScale / cam.scale;
-        return { scale:nextScale, x: mx - (mx - cam.x)*ratio, y: my - (my - cam.y)*ratio };
-      });
-    };
-    el.addEventListener("wheel", handler, { passive:false });
-    return () => el.removeEventListener("wheel", handler);
-  }, [containerRef]);
-
-  const onMouseDown = useCallback((e) => {
-    if (e.button === 1 || isPanModeRef.current) {
-      e.preventDefault();
-      isPanning.current = true;
-      lastMouse.current = { x:e.clientX, y:e.clientY };
-      setCursorStyle("grabbing");
-    }
-  }, [isPanModeRef, setCursorStyle]);
-
-  const onMouseMove = useCallback((e) => {
-    if (!isPanning.current) return;
-    const dx = e.clientX - lastMouse.current.x;
-    const dy = e.clientY - lastMouse.current.y;
-    lastMouse.current = { x:e.clientX, y:e.clientY };
-    setCamera((cam) => ({ ...cam, x:cam.x+dx, y:cam.y+dy }));
-  }, []);
-
-  const stopPan = useCallback((e) => {
-    if (isPanning.current) {
-      isPanning.current = false;
-    }
-  }, []);
-
-  return { camera, setCamera, isPanning, cameraHandlers:{ onMouseDown, onMouseMove, onMouseUp:stopPan, onMouseLeave:stopPan } };
-}
-
-function useMapImage() {
-  const [mapTransform, setMapTransform] = useState(null);
-  const loadMap = useCallback((file) => {
-    if (!file || !file.type.startsWith("image/")) return;
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const ratio = img.naturalHeight / img.naturalWidth;
-      const w = MAP_DEFAULT_CELLS;
-      setMapTransform({ src:url, x:0, y:0, w, h:Math.round(w*ratio) });
-    };
-    img.src = url;
-  }, []);
-  const updateMapTransform = useCallback((upd) => setMapTransform((p) => p ? {...p,...upd} : p), []);
-  const clearMap = useCallback(() => setMapTransform((p) => { if(p?.src) URL.revokeObjectURL(p.src); return null; }), []);
-  return { mapTransform, loadMap, updateMapTransform, clearMap };
-}
-
-function useDrawing() {
-  const [paths, setPaths] = useState([]);
-  const activeId = useRef(null);
-  const startPath  = useCallback((pt,color,size) => {
-    const id = `p-${Date.now()}`;
-    activeId.current = id;
-    setPaths((p) => [...p, { id, points:[pt], color, size }]);
-  }, []);
-  const extendPath = useCallback((pt) => {
-    const id = activeId.current; if(!id) return;
-    setPaths((p) => p.map((x) => x.id===id ? {...x, points:[...x.points,pt]} : x));
-  }, []);
-  const endPath  = useCallback(() => { activeId.current = null; }, []);
-  const undoLast = useCallback(() => setPaths((p) => p.slice(0,-1)), []);
-  const clearAll = useCallback(() => setPaths([]), []);
-  return { paths, startPath, extendPath, endPath, undoLast, clearAll };
-}
-
-function useFog() {
-  const [fogCells, setFogCells] = useState(new Set());
-  const paintFogCells = useCallback((cells) =>
-    setFogCells((p) => { const n=new Set(p); cells.forEach(([c,r])=>n.add(`${c},${r}`)); return n; }), []);
-  const eraseFogCells = useCallback((cells) =>
-    setFogCells((p) => { const n=new Set(p); cells.forEach(([c,r])=>n.delete(`${c},${r}`)); return n; }), []);
-  const clearFog = useCallback(() => setFogCells(new Set()), []);
-  const fillFog  = useCallback((cols, rows) => {
-    const n = new Set();
-    for(let c=0;c<cols;c++) for(let r=0;r<rows;r++) n.add(`${c},${r}`);
-    setFogCells(n);
-  }, []);
-  return { fogCells, paintFogCells, eraseFogCells, clearFog, fillFog };
-}
-
-// ── GridLines ──
-function GridLines({ camera, cellSize, width, height }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const cv = ref.current; if(!cv) return;
-    const ctx = cv.getContext("2d");
-    ctx.clearRect(0,0,width,height);
-    ctx.fillStyle = BG_COLOR_DARK;
-    ctx.fillRect(0,0,width,height);
-    const sc = cellSize * camera.scale;
-    if(sc < 4) return;
-    const ox = ((camera.x%sc)+sc)%sc;
-    const oy = ((camera.y%sc)+sc)%sc;
-    ctx.beginPath();
-    ctx.strokeStyle = GRID_COLOR_DARK;
-    ctx.lineWidth   = 0.5;
-    for(let x=ox;x<=width;x+=sc){ ctx.moveTo(x,0); ctx.lineTo(x,height); }
-    for(let y=oy;y<=height;y+=sc){ ctx.moveTo(0,y); ctx.lineTo(width,y); }
-    ctx.stroke();
-  }, [camera, cellSize, width, height]);
-  return <canvas ref={ref} width={width} height={height} style={{ position:"absolute",top:0,left:0,pointerEvents:"none" }} />;
-}
-
-// ── MapImageLayer ──
-function MapImageLayer({ mapTransform, cellSize, cameraScale, canEdit, onUpdate }) {
-  const dragging = useRef(false);
-  const resizing = useRef(null);
-  const ds       = useRef({});
-  if(!mapTransform) return null;
-  const px=mapTransform.x*cellSize, py=mapTransform.y*cellSize;
-  const pw=mapTransform.w*cellSize, ph=mapTransform.h*cellSize;
-
-  const onImgDown = (e) => {
-    if(!canEdit||resizing.current) return;
-    e.stopPropagation();
-    dragging.current=true;
-    ds.current={ mx:e.clientX, my:e.clientY, tx:mapTransform.x, ty:mapTransform.y };
-    const sc = cameraScale;
-    const mv=(ev)=>{ if(!dragging.current)return; onUpdate({ x:ds.current.tx+(ev.clientX-ds.current.mx)/sc/cellSize, y:ds.current.ty+(ev.clientY-ds.current.my)/sc/cellSize }); };
-    const up=()=>{ dragging.current=false; window.removeEventListener("mousemove",mv); window.removeEventListener("mouseup",up); };
-    window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
-  };
-
-  const onHandleDown = (h) => (e) => {
-    if(!canEdit) return; e.stopPropagation(); resizing.current=h;
-    ds.current={ mx:e.clientX, my:e.clientY, tx:mapTransform.x, ty:mapTransform.y, tw:mapTransform.w, th:mapTransform.h };
-    const sc=cameraScale;
-    const mv=(ev)=>{
-      const dx=(ev.clientX-ds.current.mx)/sc/cellSize, dy=(ev.clientY-ds.current.my)/sc/cellSize, d=ds.current;
-      let {tx,ty,tw,th}=d;
-      if(h.includes("e")) tw=Math.max(1,d.tw+dx);
-      if(h.includes("s")) th=Math.max(1,d.th+dy);
-      if(h.includes("w")){ tx=d.tx+dx; tw=Math.max(1,d.tw-dx); }
-      if(h.includes("n")){ ty=d.ty+dy; th=Math.max(1,d.th-dy); }
-      onUpdate({x:tx,y:ty,w:tw,h:th});
-    };
-    const up=()=>{ resizing.current=null; window.removeEventListener("mousemove",mv); window.removeEventListener("mouseup",up); };
-    window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
-  };
-
-  const handles=[{id:"nw",cx:px,cy:py},{id:"n",cx:px+pw/2,cy:py},{id:"ne",cx:px+pw,cy:py},{id:"e",cx:px+pw,cy:py+ph/2},{id:"se",cx:px+pw,cy:py+ph},{id:"s",cx:px+pw/2,cy:py+ph},{id:"sw",cx:px,cy:py+ph},{id:"w",cx:px,cy:py+ph/2}];
-  const cur={nw:"nw-resize",n:"n-resize",ne:"ne-resize",e:"e-resize",se:"se-resize",s:"s-resize",sw:"sw-resize",w:"w-resize"};
-
-  return (
-    <g style={{ pointerEvents:canEdit?"auto":"none" }}>
-      <image href={mapTransform.src} x={px} y={py} width={pw} height={ph} preserveAspectRatio="xMidYMid meet" style={{ cursor:canEdit?"move":"default" }} onMouseDown={onImgDown} />
-      {canEdit && <rect x={px} y={py} width={pw} height={ph} fill="none" stroke="rgba(80,180,255,0.7)" strokeWidth={1.5} strokeDasharray="6 3" style={{ pointerEvents:"none" }} />}
-      {canEdit && handles.map(({id,cx,cy})=>(
-        <rect key={id} x={cx-5} y={cy-5} width={10} height={10} rx={2} fill="rgba(30,140,255,0.9)" stroke="#fff" strokeWidth={1} style={{ cursor:cur[id] }} onMouseDown={onHandleDown(id)} />
-      ))}
-    </g>
-  );
-}
-
-// ── DrawingLayer ──
-function DrawingLayer({ paths, camera, width, height }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const cv=ref.current; if(!cv) return;
-    const ctx=cv.getContext("2d");
-    ctx.clearRect(0,0,width,height);
-    ctx.save(); ctx.translate(camera.x,camera.y); ctx.scale(camera.scale,camera.scale);
-    for(const p of paths){
-      if(p.points.length<2) continue;
-      ctx.beginPath(); ctx.strokeStyle=p.color; ctx.lineWidth=p.size;
-      ctx.lineCap="round"; ctx.lineJoin="round";
-      ctx.moveTo(p.points[0].x,p.points[0].y);
-      for(let i=1;i<p.points.length;i++) ctx.lineTo(p.points[i].x,p.points[i].y);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }, [paths,camera,width,height]);
-  return <canvas ref={ref} width={width} height={height} style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:3 }} />;
-}
-
-// ── DrawingCanvas ──
-function DrawingCanvas({ camera, width, height, brushColor, brushSize, onStart, onExtend, onEnd }) {
-  const drawing = useRef(false);
-  const s2w = (e,rect) => ({ x:(e.clientX-rect.left-camera.x)/camera.scale, y:(e.clientY-rect.top-camera.y)/camera.scale });
-  return (
-    <canvas width={width} height={height} style={{ position:"absolute",top:0,left:0,cursor:"crosshair",zIndex:5 }}
-      onMouseDown={(e)=>{ if(e.button!==0)return; drawing.current=true; onStart(s2w(e,e.currentTarget.getBoundingClientRect()),brushColor,brushSize); }}
-      onMouseMove={(e)=>{ if(!drawing.current)return; onExtend(s2w(e,e.currentTarget.getBoundingClientRect())); }}
-      onMouseUp={()=>{ drawing.current=false; onEnd(); }}
-      onMouseLeave={()=>{ if(drawing.current){ drawing.current=false; onEnd(); } }} />
-  );
-}
-
-// ── FogLayer ──
-function FogLayer({ fogCells, camera, cellSize, width, height, isGM }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const cv=ref.current; if(!cv) return;
-    const ctx=cv.getContext("2d");
-    ctx.clearRect(0,0,width,height);
-    if(fogCells.size===0) return;
-    ctx.save(); ctx.translate(camera.x,camera.y); ctx.scale(camera.scale,camera.scale);
-    for(const key of fogCells){
-      const [col,row]=key.split(",").map(Number);
-      const px=col*cellSize, py=row*cellSize;
-      if(isGM){
-        ctx.fillStyle="rgba(0,0,0,0.42)"; ctx.fillRect(px,py,cellSize,cellSize);
-        ctx.strokeStyle="rgba(160,80,255,0.75)"; ctx.lineWidth=1/camera.scale;
-        ctx.setLineDash([3/camera.scale,2/camera.scale]);
-        ctx.strokeRect(px+0.5,py+0.5,cellSize-1,cellSize-1); ctx.setLineDash([]);
-      } else {
-        ctx.fillStyle="#000"; ctx.fillRect(px,py,cellSize,cellSize);
-      }
-    }
-    ctx.restore();
-  }, [fogCells,camera,cellSize,width,height,isGM]);
-  return <canvas ref={ref} width={width} height={height} style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:7 }} />;
-}
-
-// ── FogPaintCanvas ──
-function FogPaintCanvas({ camera, cellSize, width, height, fogBrushCells, onPaint, onErase }) {
-  const painting=useRef(false), erasing=useRef(false), lastCell=useRef(null);
-  const toCell=(e,rect)=>({
-    col:Math.floor((e.clientX-rect.left-camera.x)/camera.scale/cellSize),
-    row:Math.floor((e.clientY-rect.top-camera.y)/camera.scale/cellSize),
-  });
-  const brush=(col,row)=>{ const cells=[],h=Math.floor(fogBrushCells/2); for(let dc=0;dc<fogBrushCells;dc++) for(let dr=0;dr<fogBrushCells;dr++) cells.push([col-h+dc,row-h+dr]); return cells; };
-  const apply=(col,row,erase)=>{ erase ? onErase(brush(col,row)) : onPaint(brush(col,row)); };
-  return (
-    <canvas width={width} height={height} style={{ position:"absolute",top:0,left:0,cursor:"cell",zIndex:9 }}
-      onMouseDown={(e)=>{ e.preventDefault(); const r=e.currentTarget.getBoundingClientRect(); const {col,row}=toCell(e,r); if(e.button===2){erasing.current=true;apply(col,row,true);}else{painting.current=true;apply(col,row,false);} lastCell.current={col,row}; }}
-      onMouseMove={(e)=>{ if(!painting.current&&!erasing.current)return; const r=e.currentTarget.getBoundingClientRect(); const {col,row}=toCell(e,r); if(lastCell.current?.col===col&&lastCell.current?.row===row)return; lastCell.current={col,row}; apply(col,row,erasing.current); }}
-      onMouseUp={()=>{ painting.current=false; erasing.current=false; }}
-      onMouseLeave={()=>{ painting.current=false; erasing.current=false; }}
-      onContextMenu={(e)=>e.preventDefault()} />
-  );
-}
-
-// ── useTokens ──
-function useTokens() {
-  const [tokens, setTokens] = useState([]);
-  const addToken = useCallback((token) => {
-    setTokens((p) => [...p, { id:`tok-${Date.now()}`, x:0, y:0, hidden:false, label:"", ...token }]);
-  }, []);
-  const updateToken = useCallback((id, upd) => {
-    setTokens((p) => p.map((t) => t.id===id ? {...t,...upd} : t));
-  }, []);
-  const removeToken = useCallback((id) => {
-    setTokens((p) => p.filter((t) => t.id!==id));
-  }, []);
-  return { tokens, addToken, updateToken, removeToken };
-}
-
-// ── TokenLayer ──
-function TokenLayer({ tokens, camera, cellSize, isGM, onUpdate, onRemove, activeTool }) {
-  const dragging = useRef(null);
-  const [selected, setSelected] = useState(null);
-
-  const toWorld = (e, rect) => ({
-    x: (e.clientX - rect.left - camera.x) / camera.scale,
-    y: (e.clientY - rect.top  - camera.y) / camera.scale,
-  });
-
-  const snapToGrid = (wx, wy) => ({
-    x: Math.round(wx / cellSize),
-    y: Math.round(wy / cellSize),
-  });
-
-  const onTokenDown = (e, tok) => {
-    if (!isGM || activeTool !== "select") return;
-    e.stopPropagation();
-    setSelected(tok.id);
-    const rect = e.currentTarget.closest('[data-vtt-container]')?.getBoundingClientRect()
-      || e.currentTarget.getBoundingClientRect();
-    dragging.current = {
-      id: tok.id,
-      startMx: e.clientX, startMy: e.clientY,
-      startTx: tok.x,     startTy: tok.y,
-      rect,
-    };
-    const mv = (ev) => {
-      if (!dragging.current) return;
-      const d = dragging.current;
-      const dx = (ev.clientX - d.startMx) / camera.scale / cellSize;
-      const dy = (ev.clientY - d.startMy) / camera.scale / cellSize;
-      onUpdate(d.id, { x: d.startTx + dx, y: d.startTy + dy });
-    };
-    const up = (ev) => {
-      if (!dragging.current) return;
-      const d = dragging.current;
-      const dx = (ev.clientX - d.startMx) / camera.scale / cellSize;
-      const dy = (ev.clientY - d.startMy) / camera.scale / cellSize;
-      const snapped = snapToGrid((d.startTx + dx) * cellSize, (d.startTy + dy) * cellSize);
-      onUpdate(d.id, { x: snapped.x, y: snapped.y });
-      dragging.current = null;
-      window.removeEventListener('mousemove', mv);
-      window.removeEventListener('mouseup', up);
-    };
-    window.addEventListener('mousemove', mv);
-    window.addEventListener('mouseup', up);
-  };
-
-  const px = (v) => v * cellSize * camera.scale + camera.x;
-  const py = (v) => v * cellSize * camera.scale + camera.y;
-  const sz = cellSize * camera.scale;
-
-  return (
-    <div style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", pointerEvents:"none", zIndex:6 }}>
-      {tokens.map((tok) => {
-        if (!isGM && tok.hidden) return null;
-        const opacity = tok.hidden ? 0.4 : 1;
-        const left = px(tok.x) - sz/2;
-        const top  = py(tok.y) - sz/2;
-        const isSel = selected === tok.id;
-        return (
-          <div key={tok.id} style={{ position:"absolute", left, top, width:sz, height:sz, opacity, pointerEvents: isGM && activeTool==="select" ? "auto" : "none", cursor: isGM ? "grab" : "default", userSelect:"none" }}
-            onMouseDown={(e) => onTokenDown(e, tok)}>
-            {/* Anel de seleção */}
-            {isSel && isGM && (
-              <div style={{ position:"absolute", inset:-3, borderRadius:"50%", border:"2px solid rgba(80,180,255,0.9)", pointerEvents:"none", zIndex:2 }} />
-            )}
-            {/* Imagem ou círculo */}
-            {tok.src ? (
-              <img src={tok.src} alt={tok.label||"token"} style={{ width:"100%", height:"100%", borderRadius:"50%", objectFit:"cover", border:"2px solid rgba(255,255,255,0.5)", display:"block" }} draggable={false} />
-            ) : (
-              <div style={{ width:"100%", height:"100%", borderRadius:"50%", background: tok.color||"#5278e0", border:"2px solid rgba(255,255,255,0.5)", display:"flex", alignItems:"center", justifyContent:"center", fontSize: Math.max(10, sz*0.35), color:"#fff", fontWeight:700 }}>
-                {(tok.label||"?")[0].toUpperCase()}
-              </div>
-            )}
-            {/* Label */}
-            {tok.label && (
-              <div style={{ position:"absolute", bottom: -sz*0.22, left:"50%", transform:"translateX(-50%)", background:"rgba(0,0,0,0.65)", color:"#fff", fontSize: Math.max(9, sz*0.2), padding:"1px 5px", borderRadius:3, whiteSpace:"nowrap", pointerEvents:"none", zIndex:3 }}>
-                {tok.label}
-              </div>
-            )}
-            {/* Botões GM (visíveis apenas quando selecionado) */}
-            {isSel && isGM && (
-              <div style={{ position:"absolute", top: -sz*0.35, right: -sz*0.15, display:"flex", gap:3, zIndex:4 }}>
-                <button title={tok.hidden?"Mostrar ao Jogador":"Esconder do Jogador"} onClick={(e)=>{ e.stopPropagation(); onUpdate(tok.id,{hidden:!tok.hidden}); }}
-                  style={{ width:20, height:20, borderRadius:4, border:"none", background:tok.hidden?"rgba(220,60,40,0.85)":"rgba(40,120,220,0.85)", color:"#fff", fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>
-                  {tok.hidden?"👁":"🙈"}
-                </button>
-                <button title="Remover token" onClick={(e)=>{ e.stopPropagation(); onRemove(tok.id); setSelected(null); }}
-                  style={{ width:20, height:20, borderRadius:4, border:"none", background:"rgba(180,40,20,0.85)", color:"#fff", fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>
-                  ✕
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── AddTokenModal ──
-function AddTokenModal({ onAdd, onClose }) {
-  const [label, setLabel] = useState("");
-  const [color, setColor] = useState("#5278e0");
-  const [src, setSrc]     = useState(null);
-  const fileRef = useRef(null);
-  const TOKEN_COLORS = ["#5278e0","#e05252","#52c47a","#e09a3a","#9a52e0","#e052b4","#4ac4c4","#d4c84a"];
-  const handleFile = (e) => {
-    const f = e.target.files[0];
-    if (!f || !f.type.startsWith("image/")) return;
-    const url = URL.createObjectURL(f);
-    setSrc(url);
-  };
-  const handleAdd = () => {
-    onAdd({ label: label.trim()||"Token", color, src });
-    onClose();
-  };
-  return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
-      onClick={(e)=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div style={{ background:"#1e1e1e", border:"1px solid rgba(255,255,255,0.15)", borderRadius:10, padding:"20px 22px", width:280, display:"flex", flexDirection:"column", gap:12 }}>
-        <div style={{ fontSize:14, fontWeight:700, color:"#e0ddd8", letterSpacing:"0.05em" }}>Adicionar Token</div>
-        <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-          <label style={{ fontSize:11, color:"rgba(180,170,160,0.7)", textTransform:"uppercase", letterSpacing:"0.08em" }}>Nome / Label</label>
-          <input value={label} onChange={(e)=>setLabel(e.target.value)} placeholder="ex: Goblin, Herói..." maxLength={20}
-            style={{ background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:5, padding:"5px 8px", color:"#e0ddd8", fontSize:13, outline:"none" }} />
-        </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-          <label style={{ fontSize:11, color:"rgba(180,170,160,0.7)", textTransform:"uppercase", letterSpacing:"0.08em" }}>Imagem (opcional)</label>
-          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-            <button onClick={()=>fileRef.current?.click()} style={{ padding:"5px 10px", borderRadius:5, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>📂 Escolher imagem</button>
-            {src && <span style={{ fontSize:11, color:"rgba(80,200,120,0.9)" }}>✓ Carregada</span>}
-            <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={handleFile} />
-          </div>
-          {src && <img src={src} alt="preview" style={{ width:56, height:56, borderRadius:"50%", objectFit:"cover", border:"2px solid rgba(255,255,255,0.3)", alignSelf:"center" }} />}
-        </div>
-        {!src && (
-          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-            <label style={{ fontSize:11, color:"rgba(180,170,160,0.7)", textTransform:"uppercase", letterSpacing:"0.08em" }}>Cor do círculo</label>
-            <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
-              {TOKEN_COLORS.map((c)=>(
-                <button key={c} onClick={()=>setColor(c)} style={{ width:24, height:24, borderRadius:"50%", background:c, border:color===c?"3px solid #fff":"2px solid rgba(255,255,255,0.2)", cursor:"pointer", padding:0 }} />
-              ))}
-            </div>
-          </div>
-        )}
-        <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:4 }}>
-          <button onClick={onClose} style={{ padding:"6px 14px", borderRadius:5, border:"1px solid rgba(255,255,255,0.15)", background:"transparent", color:"#9a9690", cursor:"pointer", fontSize:12 }}>Cancelar</button>
-          <button onClick={handleAdd} style={{ padding:"6px 14px", borderRadius:5, border:"none", background:"rgba(40,120,220,0.85)", color:"#fff", cursor:"pointer", fontSize:12, fontWeight:600 }}>Adicionar ✦</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Styles ──
-const secS = { background:"rgba(30,30,30,0.92)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:8, padding:"6px 8px", display:"flex", flexDirection:"column", gap:5, backdropFilter:"blur(8px)", boxShadow: "0 4px 15px rgba(0,0,0,0.4)" };
-const lblS = { fontSize:10, color:"rgba(200,190,180,0.8)", textTransform:"uppercase", letterSpacing:"0.08em", userSelect:"none" };
-
-// ── GMToolbox ──
-function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken }) {
-  const fileRef = useRef(null);
-  const tbtn = (id) => ({
-    onClick:()=>setActiveTool(id),
-    style:{ padding:"5px 10px", borderRadius:6, cursor:"pointer", fontSize:12, userSelect:"none", whiteSpace:"nowrap",
-      border:`1px solid ${activeTool===id?(id==="fog"?"rgba(160,80,255,0.8)":"rgba(80,180,255,0.8)"):"rgba(255,255,255,0.12)"}`,
-      background:activeTool===id?(id==="fog"?"rgba(80,20,140,0.5)":"rgba(40,120,220,0.35)"):"rgba(30,30,30,0.75)",
-      color:activeTool===id?(id==="fog"?"#d8b4fe":"#e0ddd8"):"#e0ddd8" }
-  });
-  const abtn = (onClick,danger=false) => ({
-    onClick, style:{ padding:"5px 10px", borderRadius:6, cursor:"pointer", fontSize:12,
-      border:`1px solid ${danger?"rgba(220,60,40,0.5)":"rgba(255,255,255,0.12)"}`,
-      background:danger?"rgba(180,40,20,0.3)":"rgba(30,30,30,0.75)",
-      color:danger?"#f0a090":"#b0aaa4" }
-  });
-  return (
-    <div style={{ position:"absolute", top:12, left:12, display:"flex", flexDirection:"column", gap:6, zIndex:20, maxHeight:"calc(100% - 80px)", overflowY:"auto" }}>
-      {/* Ferramentas */}
-      <div style={secS}>
-        <span style={lblS}>Ferramenta</span>
-        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-          <button {...tbtn("select")}>↖ Mover</button>
-          <button {...tbtn("draw")}>✏ Caneta</button>
-          <button {...tbtn("fog")}>🌫 Névoa</button>
-        </div>
-      </div>
-      {/* Mapa */}
-      <div style={secS}>
-        <span style={lblS}>Mapa de Fundo</span>
-        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-          <button onClick={()=>fileRef.current?.click()} style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>📂 Carregar imagem</button>
-          {hasMap && <button {...abtn(onMapClear,true)}>🗑 Remover</button>}
-          <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={(e)=>{ onMapUpload(e.target.files[0]); e.target.value=""; }} />
-        </div>
-        {!hasMap && <span style={{ fontSize:11, color:"rgba(201,149,42,0.5)", fontStyle:"italic" }}>Arraste o mapa para posicionar</span>}
-      </div>
-      {/* Caneta */}
-      {activeTool==="draw" && <>
-        <div style={secS}>
-          <span style={lblS}>Cor</span>
-          <div style={{ display:"flex", flexWrap:"wrap", gap:4, maxWidth:150 }}>
-            {DRAW_COLORS.map(({value,label})=>(
-              <button key={value} title={label} onClick={()=>setBrushColor(value)} style={{ width:20,height:20,borderRadius:"50%",background:value,padding:0,cursor:"pointer",border:brushColor===value?"2px solid rgba(80,180,255,0.9)":"2px solid rgba(255,255,255,0.15)" }} />
-            ))}
-          </div>
-        </div>
-        <div style={secS}>
-          <span style={lblS}>Espessura</span>
-          <div style={{ display:"flex", gap:4 }}>
-            {BRUSH_SIZES.map((s)=>(
-              <button key={s} onClick={()=>setBrushSize(s)} style={{ width:28,height:28,borderRadius:"50%",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",background:brushSize===s?"rgba(40,120,220,0.4)":"rgba(30,30,30,0.75)",border:brushSize===s?"1px solid rgba(80,180,255,0.8)":"1px solid rgba(255,255,255,0.12)" }}>
-                <div style={{ width:Math.min(s,16),height:Math.min(s,16),borderRadius:"50%",background:brushColor }} />
-              </button>
-            ))}
-          </div>
-        </div>
-        <div style={secS}>
-          <span style={lblS}>Ações</span>
-          <div style={{ display:"flex", gap:4 }}>
-            <button {...abtn(onUndoDraw)}>↩ Desfazer</button>
-            <button {...abtn(onClearDraw,true)}>🗑 Limpar tudo</button>
-          </div>
-        </div>
-      </>}
-      {/* Névoa */}
-      {activeTool==="fog" && <>
-        <div style={{ ...secS, borderColor:"rgba(160,80,255,0.3)", background:"rgba(60,20,80,0.65)" }}>
-          <span style={{ ...lblS, color:"rgba(200,150,255,0.85)" }}>Modo Névoa</span>
-          <div style={{ fontSize:11, color:"rgba(180,140,220,0.9)", lineHeight:1.6 }}>
-            <div>🖱️ <b>Esquerdo</b>: pintar névoa</div>
-            <div>🖱️ <b>Direito</b>: apagar névoa</div>
-            <div style={{ opacity:0.65, marginTop:2 }}>Jogadores veem preto sólido</div>
-          </div>
-        </div>
-        <div style={secS}>
-          <span style={lblS}>Pincel (células)</span>
-          <div style={{ display:"flex", gap:4 }}>
-            {FOG_BRUSH_CELLS.map((n)=>(
-              <button key={n} onClick={()=>setFogBrushCells(n)} style={{ width:32,height:28,borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:600,background:fogBrushCells===n?"rgba(120,40,220,0.5)":"rgba(30,30,30,0.75)",border:fogBrushCells===n?"1px solid rgba(160,80,255,0.8)":"1px solid rgba(255,255,255,0.12)",color:fogBrushCells===n?"#d8b4fe":"#9a9690" }}>
-                {n}×{n}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div style={secS}>
-          <span style={lblS}>Ações Rápidas</span>
-          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-            <button onClick={onFillFog} style={{ padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:12,textAlign:"left",border:"1px solid rgba(160,80,255,0.3)",background:"rgba(80,20,120,0.35)",color:"#d8b4fe" }}>■ Cobrir tudo com névoa</button>
-            <button {...abtn(onClearFog,true)}>☀ Revelar tudo</button>
-          </div>
-        </div>
-      </>}
-      {/* Tokens */}
-      <div style={secS}>
-        <span style={lblS}>Tokens</span>
-        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-          <button onClick={onAddToken} style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>🎭 Adicionar Token</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RoleBadge({ role }) {
-  const gm = role==="GM";
-  return <div style={{ position:"absolute",top:12,right:12,padding:"4px 12px",borderRadius:20,fontSize:12,fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",background:gm?"#7f4b2e":"#1a5c42",color:gm?"#f5d6c0":"#a8ebd0",border:`1px solid ${gm?"#a0603a":"#2d8a62"}`,pointerEvents:"none",zIndex:10,userSelect:"none" }}>{gm?"⚔ Mestre":"🎲 Jogador"}</div>;
-}
-
-function CameraControls({ camera, setCamera }) {
-  const bs = { width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(30,30,30,0.82)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:6,color:"#e0ddd8",cursor:"pointer",fontSize:16,userSelect:"none" };
-  return (
-    <div style={{ position:"absolute",bottom:16,left:16,display:"flex",flexDirection:"column",gap:4,zIndex:10 }}>
-      <button style={bs} onClick={()=>setCamera((c)=>({...c,scale:Math.min(ZOOM_MAX,c.scale*1.2)}))} title="Zoom in (+)">+</button>
-      <button style={{...bs,fontSize:11}} onClick={()=>setCamera({x:0,y:0,scale:1})} title="Resetar câmera">⌂</button>
-      <button style={bs} onClick={()=>setCamera((c)=>({...c,scale:Math.max(ZOOM_MIN,c.scale/1.2)}))} title="Zoom out (-)">−</button>
-      <div style={{ background:"rgba(30,30,30,0.7)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,padding:"2px 6px",fontSize:10,color:"#9a9690",textAlign:"center",userSelect:"none" }}>
-        {Math.round(camera.scale*100)}%
-      </div>
-    </div>
-  );
-}
-
-// ── Atalhos de teclado helper ──
-function useKeyboard(isPanMode, setIsPanMode, permissions, setActiveTool, undoLast) {
-  useEffect(() => {
-    const kd=(e)=>{
-      const tag = document.activeElement?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable) return;
-
-      if(e.code==="Space"&&!e.repeat){ setIsPanMode(true); return; }
-      if(e.code==="KeyZ"&&(e.ctrlKey||e.metaKey)&&permissions.canDraw){ e.preventDefault(); undoLast(); return; }
-      if(permissions.canEdit){
-        if(e.code==="KeyV") setActiveTool("select");
-        if(e.code==="KeyP") setActiveTool("draw");
-        if(e.code==="KeyF") setActiveTool("fog");
-      }
-    };
-    const ku=(e)=>{ if(e.code==="Space") setIsPanMode(false); };
-    window.addEventListener("keydown",kd);
-    window.addEventListener("keyup",ku);
-    return ()=>{ window.removeEventListener("keydown",kd); window.removeEventListener("keyup",ku); };
-  }, [isPanMode, setIsPanMode, permissions, setActiveTool, undoLast]);
-}
-
-// ── VTTGrid principal ──
-function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
-  const containerRef = useRef(null);
-  const [size, setSize]         = useState({ width:800, height:600 });
-  const [showRO, setShowRO]     = useState(false);
-  const [isPanMode, setIsPanMode] = useState(false);
-  const isPanModeRef = useRef(false);
-  const setIsPanModeSync = useCallback((v) => {
-    isPanModeRef.current = v;
-    setIsPanMode(v);
-  }, []);
-
-  const [activeTool, setActiveTool] = useState("select");
-  const [brushColor, setBrushColor] = useState(DRAW_COLORS[0].value);
-  const [brushSize,  setBrushSize]  = useState(BRUSH_SIZES[1]);
-  const [fogBrushCells, setFogBrushCells] = useState(FOG_BRUSH_CELLS[0]);
-  const [cursorStyle, setCursorStyle] = useState("default");
-
-  const permissions = useRole(role);
-  const { camera, setCamera, isPanning, cameraHandlers } = useCamera(containerRef, isPanModeRef, setCursorStyle);
-  const { mapTransform, loadMap, updateMapTransform, clearMap } = useMapImage();
-  const { paths, startPath, extendPath, endPath, undoLast, clearAll } = useDrawing();
-  const { fogCells, paintFogCells, eraseFogCells, clearFog, fillFog } = useFog();
-  const { tokens, addToken, updateToken, removeToken } = useTokens();
-  const [showTokenModal, setShowTokenModal] = useState(false);
-
-  useKeyboard(isPanMode, setIsPanModeSync, permissions, setActiveTool, undoLast);
-
-  // ResizeObserver para dimensionar o canvas ao container real
-  useEffect(() => {
-    const el = containerRef.current; if(!el) return;
-    setSize({ width: el.offsetWidth, height: el.offsetHeight });
-    const obs = new ResizeObserver(([e]) => {
-      const { width, height } = e.contentRect;
-      if (width > 0 && height > 0) setSize({ width, height });
-    });
-    obs.observe(el);
-    return ()=>obs.disconnect();
-  }, []);
-
-  const handleMouseDown = useCallback((e) => {
-    const capturing = permissions.canEdit && (activeTool==="draw"||activeTool==="fog") && e.button===0 && !isPanMode;
-    if(capturing) return;
-    cameraHandlers.onMouseDown(e);
-  }, [isPanMode, activeTool, permissions.canEdit, cameraHandlers]);
-
-  const stopPan = useCallback((e) => {
-    cameraHandlers.onMouseUp(e);
-    if (isPanMode) {
-      setCursorStyle("grab");
-    } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog")) {
-      setCursorStyle("none");
-    } else {
-      setCursorStyle("default");
-    }
-  }, [isPanMode, activeTool, permissions.canEdit, cameraHandlers]);
-
-  const handleClick = useCallback((e) => {
-    if(isPanMode||isPanning.current) return;
-    if(permissions.canEdit&&(activeTool==="draw"||activeTool==="fog")) return;
-    if(!permissions.canEdit){ setShowRO(true); setTimeout(()=>setShowRO(false),1800); }
-  }, [permissions.canEdit, activeTool, isPanMode, isPanning]);
-
-  const handleFillFog = useCallback(() => {
-    const cols = mapTransform ? Math.ceil(mapTransform.x+mapTransform.w+5) : 40;
-    const rows = mapTransform ? Math.ceil(mapTransform.y+mapTransform.h+5) : 30;
-    fillFog(Math.max(cols,40), Math.max(rows,30));
-  }, [fillFog, mapTransform]);
-
-  useEffect(() => {
-    if (isPanning.current) return;
-    if (isPanMode) {
-      setCursorStyle("grab");
-    } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog")) {
-      setCursorStyle("none");
-    } else {
-      setCursorStyle("default");
-    }
-  }, [isPanMode, activeTool, permissions.canEdit]);
-
-  const wt = `translate(${camera.x},${camera.y}) scale(${camera.scale})`;
-
-  return (
-    <div ref={containerRef}
-      data-vtt-container="true"
-      style={{ position:"relative",width:"100%",height:"100%",overflow:"hidden",cursor:cursorStyle,outline:"none",background:BG_COLOR_DARK }}
-      tabIndex={0}
-      onClick={handleClick}
-      onMouseDown={handleMouseDown}
-      onMouseMove={cameraHandlers.onMouseMove}
-      onMouseUp={stopPan}
-      onMouseLeave={stopPan}
-    >
-      <GridLines camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
-
-      <svg style={{ position:"absolute",top:0,left:0,width:size.width,height:size.height,overflow:"visible",pointerEvents: (activeTool === "draw" || activeTool === "fog") ? "none" : "none",zIndex:1 }}>
-        <g transform={wt} style={{ pointerEvents: (activeTool === "select") ? "auto" : "none" }} data-layer="world">
-          <MapImageLayer mapTransform={mapTransform} cellSize={cellSize} cameraScale={camera.scale} canEdit={permissions.canEdit} onUpdate={updateMapTransform} />
-        </g>
-      </svg>
-
-      <DrawingLayer paths={paths} camera={camera} width={size.width} height={size.height} />
-
-      {permissions.canDraw && activeTool==="draw" && !isPanMode && (
-        <DrawingCanvas camera={camera} width={size.width} height={size.height}
-          brushColor={brushColor} brushSize={brushSize}
-          onStart={startPath} onExtend={extendPath} onEnd={endPath} />
-      )}
-
-      <FogLayer fogCells={fogCells} camera={camera} cellSize={cellSize} width={size.width} height={size.height} isGM={permissions.isGM} />
-
-      <TokenLayer tokens={tokens} camera={camera} cellSize={cellSize} isGM={permissions.isGM} onUpdate={updateToken} onRemove={removeToken} activeTool={activeTool} />
-
-      {permissions.canFog && activeTool==="fog" && !isPanMode && (
-        <FogPaintCanvas camera={camera} cellSize={cellSize} width={size.width} height={size.height}
-          fogBrushCells={fogBrushCells} onPaint={paintFogCells} onErase={eraseFogCells} />
-      )}
-
-      <RoleBadge role={role} />
-      <CameraControls camera={camera} setCamera={setCamera} />
-
-      {permissions.canEdit && (
-        <GMToolbox
-          activeTool={activeTool}       setActiveTool={setActiveTool}
-          brushColor={brushColor}       setBrushColor={setBrushColor}
-          brushSize={brushSize}         setBrushSize={setBrushSize}
-          fogBrushCells={fogBrushCells} setFogBrushCells={setFogBrushCells}
-          onMapUpload={loadMap}         onMapClear={clearMap}         hasMap={!!mapTransform}
-          onUndoDraw={undoLast}         onClearDraw={clearAll}
-          onClearFog={clearFog}         onFillFog={handleFillFog}
-          onAddToken={()=>setShowTokenModal(true)} />
-      )}
-
-      {showTokenModal && permissions.canEdit && (
-        <AddTokenModal onAdd={addToken} onClose={()=>setShowTokenModal(false)} />
-      )}
-
-      {/* Indicador de pan */}
-      {isPanMode && (
-        <div style={{ position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",background:"rgba(30,30,30,0.75)",color:"#ccc",padding:"4px 14px",borderRadius:6,fontSize:12,pointerEvents:"none",zIndex:30 }}>
-          Modo Pan — arraste para mover
-        </div>
-      )}
-
-      {/* Indicador de névoa */}
-      {permissions.canFog && activeTool==="fog" && !isPanMode && (
-        <div style={{ position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",background:"rgba(60,10,90,0.85)",color:"#d8b4fe",padding:"4px 14px",borderRadius:6,fontSize:12,pointerEvents:"none",zIndex:30,border:"1px solid rgba(160,80,255,0.4)" }}>
-          🌫 Névoa — Esq: pintar · Dir: apagar · Espaço: pan
-        </div>
-      )}
-
-      {/* Read-only flash */}
-      {showRO && (
-        <div style={{ position:"absolute",bottom:56,left:"50%",transform:"translateX(-50%)",background:"rgba(180,60,30,0.88)",color:"#fff",padding:"6px 18px",borderRadius:8,fontSize:13,pointerEvents:"none",zIndex:20 }}>
-          Apenas o Mestre pode editar o tabuleiro
-        </div>
-      )}
-
-      {/* Legenda atalhos (canto inferior direito) */}
-      <div style={{ position:"absolute",bottom:16,right:16,fontSize:10,color:"rgba(0,0,0,0.25)",lineHeight:1.7,textAlign:"right",pointerEvents:"none",zIndex:10,userSelect:"none" }}>
-        {permissions.canEdit && <><div>V · Mover &nbsp; P · Caneta &nbsp; F · Névoa</div><div>Espaço · Pan &nbsp; Ctrl+Z · Desfazer</div></>}
-        <div>Scroll · Zoom &nbsp; Botão do meio · Pan</div>
-      </div>
-    </div>
-  );
-}
-
-// ── VTTApp: detecta papel do grimório ──
-function VTTApp() {
-  const [role, setRole] = useState(() => typeof window.isMaster!=="undefined" ? (window.isMaster?"GM":"PLAYER") : "PLAYER");
-  useEffect(() => {
-    const t = setInterval(()=>{
-      if(typeof window.isMaster!=="undefined"){
-        setRole(window.isMaster?"GM":"PLAYER");
-      }
-    }, 1500);
-    return ()=>clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    const nav = document.getElementById('main-nav');
-    const bar = document.getElementById('player-bar');
-    const top = (nav?.offsetHeight || 0) + (bar?.offsetHeight || 0);
-    document.documentElement.style.setProperty('--vtt-top', top + 'px');
-  }, []);
-
-  return <VTTGrid role={role} cellSize={40} />;
-}
-
-// ── Mount (lazy, chamado pelo showTab do grimório) ──
-let _mounted = false;
-window._mountVTT = function() {
-  if(_mounted) return;
-  const root = document.getElementById("vtt-root");
-  if(!root) return;
-  _mounted = true;
-  ReactDOM.createRoot(root).render(<VTTApp />);
-  setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
+const TACTICAL_HTML = `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0b0f17">
+<title>Tactical Grid · Editor</title>
+<script src="https://unpkg.com/konva@9.3.16/konva.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;width:100%;overflow:hidden;font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#0b0f17}
+  kbd{font-family:ui-monospace,monospace;background:rgba(255,255,255,.1);padding:1px 5px;border-radius:3px;font-size:10px}
+
+  /* ─── STAGE ─── */
+  #stage{position:absolute;inset:0}
+
+  /* ─── SIDEBAR ─── */
+  #sidebar-toggle{
+    position:fixed;top:12px;left:12px;z-index:40;width:36px;height:36px;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(11,15,23,.92);color:#cbd5e1;border:1px solid rgba(255,255,255,.08);
+    border-radius:6px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25)
+  }
+  #sidebar-toggle:hover{background:#0b0f17;color:#fff}
+  #sidebar{
+    position:fixed;left:0;top:0;height:100%;width:260px;z-index:30;
+    background:#141a26;color:#e2e8f0;
+    padding:14px 14px 24px 60px;overflow-y:auto;
+    border-right:1px solid rgba(255,255,255,.05);box-shadow:8px 0 24px -8px rgba(0,0,0,.35);
+    transition:transform .22s ease;
+  }
+  #sidebar.closed{transform:translateX(-260px)}
+  #sidebar::-webkit-scrollbar{width:6px}
+  #sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:4px}
+  .side-h1{font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#94a3b8;margin-bottom:2px}
+  .side-h2{font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:600;color:#64748b;margin:14px 0 6px}
+  .side-sub{font-size:10px;color:#64748b;margin-bottom:14px}
+  .side-kbd{font-size:10px;line-height:1.6;color:#64748b;margin-top:14px}
+
+  /* ─── BUTTONS ─── */
+  .tbtn{
+    width:100%;height:38px;display:flex;align-items:center;gap:10px;
+    padding:0 12px;margin-bottom:4px;
+    background:transparent;border:none;border-radius:6px;
+    color:#cbd5e1;font-size:13px;text-align:left;cursor:pointer;
+    transition:background .15s
+  }
+  .tbtn:hover{background:rgba(255,255,255,.04);color:#fff}
+  .tbtn.active{background:rgba(255,255,255,.08);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+  .tbtn.primary{background:#3b82f6;color:#fff}
+  .tbtn.primary:hover{background:#2563eb}
+  .tbtn.danger{color:#fca5a5}
+  .tbtn.danger:hover{background:rgba(239,68,68,.08);color:#fecaca}
+  .tbtn:disabled{opacity:.4;cursor:not-allowed}
+  .tbtn svg{flex-shrink:0}
+
+  .zoom-row{display:flex;gap:4px;margin-top:4px}
+  .zoom-row button{
+    flex:1;height:30px;background:rgba(255,255,255,.04);color:#cbd5e1;
+    border:none;border-radius:6px;cursor:pointer;font-size:12px;
+    display:flex;align-items:center;justify-content:center;gap:4px
+  }
+  .zoom-row button:hover{background:rgba(255,255,255,.1);color:#fff}
+
+  .stepper{
+    display:flex;align-items:center;gap:4px;
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05);
+    border-radius:6px;padding:6px 8px;margin-bottom:4px
+  }
+  .stepper-lbl{flex:1;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#94a3b8}
+  .stepper button{
+    width:22px;height:22px;border:none;background:transparent;color:#cbd5e1;
+    border-radius:4px;cursor:pointer;font-size:14px
+  }
+  .stepper button:hover{background:rgba(255,255,255,.06);color:#fff}
+  .stepper-val{font-family:ui-monospace,monospace;color:#fff;min-width:36px;text-align:center;font-size:12px}
+
+  .sel-info{
+    background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.05);
+    border-radius:6px;padding:8px;margin-top:6px
+  }
+  .sel-info-name{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#94a3b8;margin-bottom:6px}
+  .sel-actions{display:flex;gap:4px;margin-bottom:6px}
+  .sel-actions button{
+    flex:1;display:flex;align-items:center;justify-content:center;gap:4px;
+    background:rgba(255,255,255,.04);color:#cbd5e1;border:none;border-radius:4px;
+    padding:6px;cursor:pointer;font-size:11px
+  }
+  .sel-actions button:hover{background:rgba(255,255,255,.08);color:#fff}
+  .sel-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+
+  /* ─── HUD ─── */
+  #hud{
+    position:fixed;bottom:14px;left:14px;z-index:25;
+    display:flex;flex-direction:column;gap:6px;
+    font-family:ui-monospace,monospace;font-size:11px;pointer-events:none
+  }
+  .hud-box{
+    background:rgba(11,15,23,.92);color:#e2e8f0;
+    padding:6px 12px;border-radius:6px;
+    box-shadow:0 4px 12px rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06)
+  }
+  .hud-label{color:#94a3b8}
+  .hud-val{color:#fff;font-weight:600}
+  .hud-sel{background:rgba(59,130,246,.95);color:#fff;border:none}
+  .hud-sel-name{opacity:.75}
+  .hud-sel-coord{font-weight:700}
+
+  /* ─── DISTANCE PANEL ─── */
+  #distance{
+    position:fixed;top:14px;right:14px;z-index:25;width:260px;
+    background:rgba(11,15,23,.96);color:#f1f5f9;
+    border-radius:10px;padding:12px;
+    box-shadow:0 8px 24px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);
+    backdrop-filter:blur(10px);
+    transform:translateY(-8px);opacity:0;pointer-events:none;
+    transition:transform .2s,opacity .2s
+  }
+  #distance.show{transform:translateY(0);opacity:1;pointer-events:auto}
+  .dist-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .dist-title{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#cbd5e1;display:flex;align-items:center;gap:6px}
+  .dist-close{background:transparent;border:none;color:#94a3b8;padding:4px;border-radius:4px;cursor:pointer}
+  .dist-close:hover{background:rgba(255,255,255,.06);color:#fff}
+  .dist-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:4px}
+  .dist-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .dist-name{flex:1;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dist-coord{font-family:ui-monospace,monospace;font-size:12px;color:#94a3b8}
+  .dist-grid{
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;
+    margin-top:12px;padding:8px;
+    background:#1c2433;border-radius:6px;text-align:center;font-family:ui-monospace,monospace
+  }
+  .dist-cell-l{font-size:10px;color:#64748b}
+  .dist-cell-v{font-size:16px;font-weight:700;color:#f1f5f9}
+  .dist-cell-v.accent{color:#3b82f6}
+  .dist-help{font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:1.5px;margin-top:8px}
+
+  /* ─── DROP OVERLAY ─── */
+  #drop{
+    position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+    background:rgba(11,15,23,.6);backdrop-filter:blur(6px)
+  }
+  #drop.show{display:flex}
+  .drop-inner{
+    display:flex;flex-direction:column;align-items:center;gap:12px;
+    padding:32px 40px;border:2px dashed rgba(59,130,246,.6);border-radius:12px;
+    background:rgba(11,15,23,.85);color:#e2e8f0
+  }
+  .drop-txt{text-transform:uppercase;letter-spacing:3px;font-size:13px}
+
+  /* ─── MOBILE ─── */
+  @media (max-width:640px){
+    #sidebar{width:240px;padding-right:10px}
+    #sidebar.closed{transform:translateX(-260px)}
+    #distance{width:calc(100vw - 28px);right:14px;left:14px;top:60px}
+  }
+</style>
+</head>
+<body>
+
+<!-- Toggle sidebar -->
+<button id="sidebar-toggle" title="Recolher / Abrir">
+  <svg id="toggle-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline>
+  </svg>
+</button>
+
+<!-- Sidebar -->
+<aside id="sidebar">
+  <p class="side-h1">Tactical Grid</p>
+  <p class="side-sub">Map / Tile editor</p>
+
+  <p class="side-h2">Navegação</p>
+  <button class="tbtn" data-tool="select">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+    Seleccionar
+  </button>
+  <button class="tbtn" data-tool="pan">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+    Mover mapa
+  </button>
+  <button class="tbtn" data-tool="compare">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 8.7L8.7 21.3a1 1 0 0 1-1.4 0L2.7 16.7a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4z"/><line x1="7.5" y1="10.5" x2="9.5" y2="12.5"/><line x1="10.5" y1="7.5" x2="12.5" y2="9.5"/><line x1="13.5" y1="4.5" x2="15.5" y2="6.5"/><line x1="4.5" y1="13.5" x2="6.5" y2="15.5"/></svg>
+    Comparar 2 objectos
+  </button>
+
+  <div class="zoom-row">
+    <button id="zoom-in">+</button>
+    <button id="zoom-out">−</button>
+    <button id="zoom-reset" title="Reset">⌂</button>
+  </div>
+
+  <p class="side-h2">Edição</p>
+  <button class="tbtn primary" id="btn-add">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Adicionar imagem
+  </button>
+  <button class="tbtn danger" id="btn-del">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+    Apagar selecção
+  </button>
+  <div id="sel-info-wrap"></div>
+
+  <p class="side-h2">Grid</p>
+  <div class="stepper">
+    <span class="stepper-lbl">Célula (px)</span>
+    <button id="cell-minus">−</button>
+    <span class="stepper-val" id="cell-val">48</span>
+    <button id="cell-plus">+</button>
+  </div>
+
+  <p class="side-h2">Exportar</p>
+  <button class="tbtn" id="btn-png">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Baixar PNG
+  </button>
+  <button class="tbtn" id="btn-save">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    Salvar JSON
+  </button>
+  <button class="tbtn" id="btn-load">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    Carregar JSON
+  </button>
+
+  <p class="side-kbd">
+    <kbd>Delete</kbd> apaga · <kbd>Esc</kbd> desselecciona ·
+    <kbd>Ctrl+S</kbd> salva · <kbd>Shift+click</kbd> múltipla
+  </p>
+
+  <input type="file" id="file-img" accept="image/*" hidden multiple>
+  <input type="file" id="file-json" accept="application/json,.json" hidden>
+</aside>
+
+<!-- Konva stage -->
+<div id="stage"></div>
+
+<!-- Coord HUD -->
+<div id="hud">
+  <div class="hud-box">
+    <span class="hud-label">cursor</span> <span class="hud-val" id="hud-cursor">(0, 0)</span>
+    <span class="hud-label" style="margin-left:12px">zoom</span> <span class="hud-val" id="hud-zoom">100%</span>
+  </div>
+  <div class="hud-box hud-sel" id="hud-sel" style="display:none">
+    <span class="hud-sel-name" id="hud-sel-name">—</span>
+    <span class="hud-sel-coord" id="hud-sel-coord">(0,0)</span>
+  </div>
+</div>
+
+<!-- Distance panel -->
+<div id="distance">
+  <div class="dist-h">
+    <span class="dist-title">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 8.7L8.7 21.3a1 1 0 0 1-1.4 0L2.7 16.7a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4z"/></svg>
+      Comparar
+    </span>
+    <button class="dist-close" id="dist-close" title="Limpar">×</button>
+  </div>
+  <div class="dist-row">
+    <span class="dist-dot" style="background:#3b82f6"></span>
+    <span class="dist-name" id="dist-a-name">—</span>
+    <span class="dist-coord" id="dist-a-coord">—</span>
+  </div>
+  <div class="dist-row">
+    <span class="dist-dot" style="background:#ef4444"></span>
+    <span class="dist-name" id="dist-b-name">—</span>
+    <span class="dist-coord" id="dist-b-coord">—</span>
+  </div>
+  <div class="dist-grid">
+    <div><div class="dist-cell-l">H</div><div class="dist-cell-v" id="dist-h">0</div></div>
+    <div><div class="dist-cell-l">V</div><div class="dist-cell-v" id="dist-v">0</div></div>
+    <div><div class="dist-cell-l">Δ</div><div class="dist-cell-v accent" id="dist-t">0</div></div>
+  </div>
+  <p class="dist-help">Distância de Manhattan</p>
+</div>
+
+<!-- Drop overlay -->
+<div id="drop">
+  <div class="drop-inner">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    <span class="drop-txt">Solte para adicionar imagens</span>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════════ */
+const S = {
+  cellSize: 48,
+  objects: [],         // {id, src, name, x, y, w, h, rotation, locked}
+  selectedIds: [],
+  compareIds: [],      // até 2 IDs
+  tool: 'select',      // 'select' | 'pan' | 'compare'
+  camera: { x: 0, y: 0, scale: 1 },
+  sidebarOpen: true,
 };
 
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+
+/* ═══════════════════════════════════════════════════════════════
+   KONVA SETUP
+═══════════════════════════════════════════════════════════════ */
+const stage = new Konva.Stage({
+  container: 'stage',
+  width: window.innerWidth,
+  height: window.innerHeight,
+});
+const gridLayer = new Konva.Layer({ listening: false });
+const objLayer  = new Konva.Layer();
+const overLayer = new Konva.Layer({ listening: false });
+stage.add(gridLayer, objLayer, overLayer);
+
+const imgCache = new Map();   // src → HTMLImageElement
+function loadImage(src) {
+  if (imgCache.has(src)) return Promise.resolve(imgCache.get(src));
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { imgCache.set(src, img); res(img); };
+    img.onerror = rej;
+    img.src = src;
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER — GRID
+═══════════════════════════════════════════════════════════════ */
+function renderGrid() {
+  gridLayer.destroyChildren();
+  const cs = S.cellSize, cam = S.camera;
+  const w = stage.width(), h = stage.height();
+  const wLeft = -cam.x / cam.scale;
+  const wTop  = -cam.y / cam.scale;
+  const wRight = wLeft + w / cam.scale;
+  const wBot   = wTop + h / cam.scale;
+  const startX = Math.floor(Math.max(0, wLeft) / cs) * cs;
+  const startY = Math.floor(Math.max(0, wTop)  / cs) * cs;
+  const endX   = Math.ceil(wRight / cs) * cs;
+  const endY   = Math.ceil(wBot   / cs) * cs;
+
+  // fundo branco da área válida
+  gridLayer.add(new Konva.Rect({ x: 0, y: 0, width: endX, height: endY, fill: '#ffffff', listening: false }));
+
+  const strokeW = 1 / cam.scale;
+  for (let x = startX; x <= endX; x += cs) {
+    const major = Math.round(x / cs) % 5 === 0;
+    gridLayer.add(new Konva.Line({
+      points: [x, Math.max(0, wTop), x, wBot],
+      stroke: major ? '#cbd5e1' : '#e5e7eb',
+      strokeWidth: major ? strokeW * 1.5 : strokeW,
+      listening: false,
+    }));
+  }
+  for (let y = startY; y <= endY; y += cs) {
+    const major = Math.round(y / cs) % 5 === 0;
+    gridLayer.add(new Konva.Line({
+      points: [Math.max(0, wLeft), y, wRight, y],
+      stroke: major ? '#cbd5e1' : '#e5e7eb',
+      strokeWidth: major ? strokeW * 1.5 : strokeW,
+      listening: false,
+    }));
+  }
+  // eixos da origem
+  gridLayer.add(new Konva.Line({ points: [0, 0, endX, 0], stroke: '#94a3b8', strokeWidth: strokeW * 2, listening: false }));
+  gridLayer.add(new Konva.Line({ points: [0, 0, 0, endY], stroke: '#94a3b8', strokeWidth: strokeW * 2, listening: false }));
+  gridLayer.batchDraw();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER — OBJECTOS
+═══════════════════════════════════════════════════════════════ */
+function renderObjects() {
+  objLayer.destroyChildren();
+  S.objects.forEach(o => objLayer.add(buildObjectNode(o)));
+  objLayer.batchDraw();
+}
+
+function buildObjectNode(o) {
+  const cs = S.cellSize;
+  const w = o.w * cs, h = o.h * cs;
+  const isSelected = S.selectedIds.includes(o.id);
+  const cmpIdx = S.compareIds.indexOf(o.id);
+  const cmpColor = cmpIdx === 0 ? '#3b82f6' : cmpIdx === 1 ? '#ef4444' : null;
+
+  const group = new Konva.Group({
+    x: o.x * cs, y: o.y * cs,
+    draggable: !o.locked && S.tool === 'select',
+    id: 'o-' + o.id,
+  });
+
+  // halo da célula em comparação
+  if (cmpColor) {
+    group.add(new Konva.Rect({
+      x: 0, y: 0, width: w, height: h,
+      fill: cmpColor, opacity: 0.12, cornerRadius: 4, listening: false,
+    }));
+  }
+
+  // imagem (carrega async)
+  const placeholder = new Konva.Rect({ x: 0, y: 0, width: w, height: h, fill: '#e2e8f0', cornerRadius: 4 });
+  group.add(placeholder);
+  loadImage(o.src).then(img => {
+    const k = new Konva.Image({
+      image: img,
+      width: w, height: h,
+      rotation: o.rotation || 0,
+      offsetX: o.rotation ? w / 2 : 0,
+      offsetY: o.rotation ? h / 2 : 0,
+      x: o.rotation ? w / 2 : 0,
+      y: o.rotation ? h / 2 : 0,
+    });
+    placeholder.destroy();
+    group.add(k); k.moveToBottom();
+    // mover halo abaixo se existir
+    group.getChildren().forEach((c, i) => { if (c.attrs.fill === cmpColor) c.moveToBottom(); });
+    objLayer.batchDraw();
+  }).catch(() => {});
+
+  // borda de selecção
+  if (isSelected && !cmpColor) {
+    group.add(new Konva.Rect({
+      x: -2, y: -2, width: w + 4, height: h + 4,
+      stroke: '#0ea5e9', strokeWidth: 2, dash: [6, 4], cornerRadius: 4, listening: false,
+    }));
+  }
+  if (cmpColor) {
+    group.add(new Konva.Rect({
+      x: -2, y: -2, width: w + 4, height: h + 4,
+      stroke: cmpColor, strokeWidth: 3, cornerRadius: 4, listening: false,
+    }));
+  }
+
+  // badge coord
+  const label = new Konva.Label({ x: 0, y: -22, listening: false });
+  label.add(new Konva.Tag({ fill: '#0b0f17', cornerRadius: 3, opacity: 0.85 }));
+  label.add(new Konva.Text({ text: \`(\${o.x},\${o.y})\`, fontSize: 11, padding: 4, fill: '#e2e8f0', fontStyle: 'bold' }));
+  group.add(label);
+
+  if (o.locked) {
+    group.add(new Konva.Text({ x: w - 14, y: 2, text: '🔒', fontSize: 12, listening: false }));
+  }
+
+  /* events */
+  group.on('dragend', () => {
+    const nx = Math.max(0, Math.round(group.x() / cs));
+    const ny = Math.max(0, Math.round(group.y() / cs));
+    update(o.id, { x: nx, y: ny });
+    group.x(nx * cs); group.y(ny * cs);
+  });
+  group.on('click tap', (e) => {
+    e.cancelBubble = true;
+    if (S.tool === 'compare') { toggleCompare(o.id); render(); return; }
+    const multi = !!(e.evt && e.evt.shiftKey);
+    selectObj(o.id, multi);
+    render();
+  });
+
+  return group;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER — OVERLAY (comparação)
+═══════════════════════════════════════════════════════════════ */
+function renderOverlay() {
+  overLayer.destroyChildren();
+  if (S.compareIds.length !== 2) { overLayer.batchDraw(); return; }
+  const a = S.objects.find(o => o.id === S.compareIds[0]);
+  const b = S.objects.find(o => o.id === S.compareIds[1]);
+  if (!a || !b) { overLayer.batchDraw(); return; }
+  const cs = S.cellSize;
+  const ax = (a.x + a.w / 2) * cs, ay = (a.y + a.h / 2) * cs;
+  const bx = (b.x + b.w / 2) * cs, by = (b.y + b.h / 2) * cs;
+  const dx = Math.abs(a.x - b.x), dy = Math.abs(a.y - b.y);
+
+  // H + V tracejados
+  overLayer.add(new Konva.Line({ points: [ax, ay, bx, ay], stroke: '#3b82f6', strokeWidth: 2, dash: [6, 4], opacity: .55 }));
+  overLayer.add(new Konva.Line({ points: [bx, ay, bx, by], stroke: '#ef4444', strokeWidth: 2, dash: [6, 4], opacity: .55 }));
+  // linha directa
+  overLayer.add(new Konva.Line({ points: [ax, ay, bx, by], stroke: '#7c3aed', strokeWidth: 2 }));
+
+  // label
+  const lbl = new Konva.Label({ x: (ax + bx) / 2, y: (ay + by) / 2 });
+  lbl.add(new Konva.Tag({ fill: '#0b0f17', cornerRadius: 4, pointerDirection: 'down', pointerWidth: 8, pointerHeight: 6, opacity: .95 }));
+  lbl.add(new Konva.Text({ text: \`Δ \${dx + dy}  ·  H \${dx}  ·  V \${dy}\`, fontSize: 12, padding: 6, fill: '#f8fafc', fontStyle: 'bold' }));
+  overLayer.add(lbl);
+  overLayer.batchDraw();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER — UI (sidebar / hud / distance / camera)
+═══════════════════════════════════════════════════════════════ */
+function applyCamera() {
+  stage.position({ x: S.camera.x, y: S.camera.y });
+  stage.scale({ x: S.camera.scale, y: S.camera.scale });
+}
+function renderUI() {
+  // tool buttons
+  document.querySelectorAll('[data-tool]').forEach(b => {
+    b.classList.toggle('active', b.dataset.tool === S.tool);
+  });
+  // sidebar collapse
+  document.getElementById('sidebar').classList.toggle('closed', !S.sidebarOpen);
+  // delete button
+  document.getElementById('btn-del').disabled = S.selectedIds.length === 0;
+  // cellsize stepper
+  document.getElementById('cell-val').textContent = S.cellSize;
+  // hud zoom
+  document.getElementById('hud-zoom').textContent = Math.round(S.camera.scale * 100) + '%';
+  // hud selected
+  const sel = S.objects.find(o => o.id === S.selectedIds[0]);
+  const hsel = document.getElementById('hud-sel');
+  if (sel) {
+    hsel.style.display = 'block';
+    document.getElementById('hud-sel-name').textContent = sel.name;
+    document.getElementById('hud-sel-coord').textContent = \`(\${sel.x},\${sel.y})\`;
+  } else hsel.style.display = 'none';
+
+  // stage cursor
+  stage.container().style.cursor =
+    S.tool === 'pan' ? 'grab' : S.tool === 'compare' ? 'crosshair' : 'default';
+  stage.draggable(S.tool === 'pan');
+
+  // distance panel
+  const dist = document.getElementById('distance');
+  const a = S.objects.find(o => o.id === S.compareIds[0]);
+  const b = S.objects.find(o => o.id === S.compareIds[1]);
+  if (a && b) {
+    dist.classList.add('show');
+    document.getElementById('dist-a-name').textContent = a.name;
+    document.getElementById('dist-a-coord').textContent = \`(\${a.x}, \${a.y})\`;
+    document.getElementById('dist-b-name').textContent = b.name;
+    document.getElementById('dist-b-coord').textContent = \`(\${b.x}, \${b.y})\`;
+    const dx = Math.abs(a.x - b.x), dy = Math.abs(a.y - b.y);
+    document.getElementById('dist-h').textContent = dx;
+    document.getElementById('dist-v').textContent = dy;
+    document.getElementById('dist-t').textContent = dx + dy;
+  } else dist.classList.remove('show');
+
+  renderSelectionInfo(sel);
+}
+
+function renderSelectionInfo(sel) {
+  const wrap = document.getElementById('sel-info-wrap');
+  if (!sel) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = \`
+    <div class="sel-info">
+      <div class="sel-info-name">\${esc(sel.name)} · (\${sel.x}, \${sel.y})</div>
+      <div class="sel-actions">
+        <button id="sel-rot">↻ 90°</button>
+        <button id="sel-lock">\${sel.locked ? '🔓 Soltar' : '🔒 Travar'}</button>
+      </div>
+      <div class="sel-grid">
+        <div class="stepper">
+          <span class="stepper-lbl">W</span>
+          <button id="sel-w-minus">−</button>
+          <span class="stepper-val">\${sel.w}</span>
+          <button id="sel-w-plus">+</button>
+        </div>
+        <div class="stepper">
+          <span class="stepper-lbl">H</span>
+          <button id="sel-h-minus">−</button>
+          <span class="stepper-val">\${sel.h}</span>
+          <button id="sel-h-plus">+</button>
+        </div>
+      </div>
+    </div>\`;
+  document.getElementById('sel-rot').onclick = () => { update(sel.id, { rotation: ((sel.rotation || 0) + 90) % 360 }); render(); };
+  document.getElementById('sel-lock').onclick = () => { update(sel.id, { locked: !sel.locked }); render(); };
+  document.getElementById('sel-w-plus').onclick = () => { update(sel.id, { w: sel.w + 1 }); render(); };
+  document.getElementById('sel-w-minus').onclick = () => { update(sel.id, { w: Math.max(1, sel.w - 1) }); render(); };
+  document.getElementById('sel-h-plus').onclick = () => { update(sel.id, { h: sel.h + 1 }); render(); };
+  document.getElementById('sel-h-minus').onclick = () => { update(sel.id, { h: Math.max(1, sel.h - 1) }); render(); };
+}
+
+function render() {
+  applyCamera();
+  renderGrid();
+  renderObjects();
+  renderOverlay();
+  renderUI();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STATE MUTATIONS
+═══════════════════════════════════════════════════════════════ */
+function setTool(t) {
+  S.tool = t;
+  if (t !== 'compare') S.compareIds = [];
+  render();
+}
+function addObject(o) {
+  S.objects.push({ id: uid(), w: 1, h: 1, rotation: 0, locked: false, ...o });
+  render();
+}
+function update(id, patch) {
+  const o = S.objects.find(x => x.id === id);
+  if (!o) return;
+  Object.assign(o, patch);
+  if (patch.x !== undefined) o.x = Math.max(0, Math.round(patch.x));
+  if (patch.y !== undefined) o.y = Math.max(0, Math.round(patch.y));
+}
+function removeObject(id) {
+  S.objects = S.objects.filter(o => o.id !== id);
+  S.selectedIds = S.selectedIds.filter(x => x !== id);
+  S.compareIds = S.compareIds.filter(x => x !== id);
+}
+function removeSelected() {
+  const ids = new Set(S.selectedIds);
+  S.objects = S.objects.filter(o => !ids.has(o.id));
+  S.selectedIds = [];
+  S.compareIds = S.compareIds.filter(x => !ids.has(x));
+  render();
+}
+function selectObj(id, multi) {
+  if (multi) {
+    S.selectedIds = S.selectedIds.includes(id)
+      ? S.selectedIds.filter(x => x !== id)
+      : [...S.selectedIds, id];
+  } else S.selectedIds = [id];
+}
+function toggleCompare(id) {
+  if (S.compareIds.includes(id)) S.compareIds = S.compareIds.filter(x => x !== id);
+  else if (S.compareIds.length >= 2) S.compareIds = [S.compareIds[1], id];
+  else S.compareIds = [...S.compareIds, id];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CAMERA: zoom (wheel/pinch) + pan
+═══════════════════════════════════════════════════════════════ */
+stage.on('wheel', (e) => {
+  e.evt.preventDefault();
+  const pointer = stage.getPointerPosition();
+  if (!pointer) return;
+  const oldScale = S.camera.scale;
+  const factor = 1.08;
+  const dir = e.evt.deltaY > 0 ? -1 : 1;
+  const newScale = Math.max(0.2, Math.min(4, oldScale * (dir > 0 ? factor : 1 / factor)));
+  const mw = { x: (pointer.x - S.camera.x) / oldScale, y: (pointer.y - S.camera.y) / oldScale };
+  S.camera = { scale: newScale, x: pointer.x - mw.x * newScale, y: pointer.y - mw.y * newScale };
+  render();
+});
+
+let lastPinch = null;
+stage.on('touchmove', (e) => {
+  const ts = e.evt.touches;
+  if (ts.length !== 2) { lastPinch = null; return; }
+  e.evt.preventDefault();
+  const dist = Math.hypot(ts[1].clientX - ts[0].clientX, ts[1].clientY - ts[0].clientY);
+  if (lastPinch == null) { lastPinch = dist; return; }
+  const delta = dist / lastPinch; lastPinch = dist;
+  const newScale = Math.max(0.2, Math.min(4, S.camera.scale * delta));
+  const c = { x: (ts[0].clientX + ts[1].clientX) / 2, y: (ts[0].clientY + ts[1].clientY) / 2 };
+  const mw = { x: (c.x - S.camera.x) / S.camera.scale, y: (c.y - S.camera.y) / S.camera.scale };
+  S.camera = { scale: newScale, x: c.x - mw.x * newScale, y: c.y - mw.y * newScale };
+  render();
+});
+stage.on('touchend', () => { lastPinch = null; });
+
+stage.on('dragend', (e) => {
+  if (e.target !== stage) return;
+  S.camera.x = stage.x(); S.camera.y = stage.y();
+  renderGrid(); renderUI();
+});
+
+stage.on('click tap', (e) => {
+  if (e.target === stage) { S.selectedIds = []; render(); }
+});
+
+stage.on('mousemove', () => {
+  const p = stage.getPointerPosition(); if (!p) return;
+  const wx = (p.x - S.camera.x) / S.camera.scale;
+  const wy = (p.y - S.camera.y) / S.camera.scale;
+  const cx = Math.max(0, Math.floor(wx / S.cellSize));
+  const cy = Math.max(0, Math.floor(wy / S.cellSize));
+  document.getElementById('hud-cursor').textContent = \`(\${cx}, \${cy})\`;
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   SIDEBAR + UI WIRING
+═══════════════════════════════════════════════════════════════ */
+document.querySelectorAll('[data-tool]').forEach(b => {
+  b.addEventListener('click', () => setTool(b.dataset.tool));
+});
+document.getElementById('sidebar-toggle').addEventListener('click', () => {
+  S.sidebarOpen = !S.sidebarOpen; render();
+});
+document.getElementById('zoom-in').addEventListener('click', () => zoomCenter(1.2));
+document.getElementById('zoom-out').addEventListener('click', () => zoomCenter(1/1.2));
+document.getElementById('zoom-reset').addEventListener('click', () => { S.camera = { x: 0, y: 0, scale: 1 }; render(); });
+document.getElementById('btn-del').addEventListener('click', removeSelected);
+document.getElementById('cell-plus').addEventListener('click', () => { S.cellSize = Math.min(160, S.cellSize + 4); render(); });
+document.getElementById('cell-minus').addEventListener('click', () => { S.cellSize = Math.max(16, S.cellSize - 4); render(); });
+document.getElementById('dist-close').addEventListener('click', () => { S.compareIds = []; render(); });
+
+function zoomCenter(factor) {
+  const cx = stage.width() / 2, cy = stage.height() / 2;
+  const oldScale = S.camera.scale;
+  const newScale = Math.max(0.2, Math.min(4, oldScale * factor));
+  const mw = { x: (cx - S.camera.x) / oldScale, y: (cy - S.camera.y) / oldScale };
+  S.camera = { scale: newScale, x: cx - mw.x * newScale, y: cy - mw.y * newScale };
+  render();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADD IMAGE (botão + drop)
+═══════════════════════════════════════════════════════════════ */
+const fileImg = document.getElementById('file-img');
+const fileJSON = document.getElementById('file-json');
+document.getElementById('btn-add').addEventListener('click', () => fileImg.click());
+fileImg.addEventListener('change', async (e) => {
+  for (const f of e.target.files) await addImageFile(f);
+  fileImg.value = '';
+});
+
+async function addImageFile(file) {
+  const dataURL = await readAsDataURL(file);
+  const sx = window.innerWidth / 2, sy = window.innerHeight / 2;
+  const wx = (sx - S.camera.x) / S.camera.scale;
+  const wy = (sy - S.camera.y) / S.camera.scale;
+  const cx = Math.max(0, Math.floor(wx / S.cellSize));
+  const cy = Math.max(0, Math.floor(wy / S.cellSize));
+  addObject({ src: dataURL, name: file.name.replace(/\\.[^.]+$/, ''), x: cx, y: cy });
+}
+function readAsDataURL(f) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f);
+  });
+}
+
+/* drop overlay */
+const drop = document.getElementById('drop');
+let dropDepth = 0;
+window.addEventListener('dragenter', (e) => {
+  if (!e.dataTransfer.types.includes('Files')) return;
+  dropDepth++; drop.classList.add('show');
+});
+window.addEventListener('dragleave', () => {
+  dropDepth = Math.max(0, dropDepth - 1);
+  if (dropDepth === 0) drop.classList.remove('show');
+});
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  dropDepth = 0; drop.classList.remove('show');
+  const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'));
+  for (const f of files) await addImageFile(f);
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   EXPORT / IMPORT
+═══════════════════════════════════════════════════════════════ */
+document.getElementById('btn-png').addEventListener('click', () => {
+  // fit-to-content + pad
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  S.objects.forEach(o => {
+    const x0 = o.x * S.cellSize, y0 = o.y * S.cellSize;
+    const x1 = x0 + o.w * S.cellSize, y1 = y0 + o.h * S.cellSize;
+    if (x0 < minX) minX = x0; if (y0 < minY) minY = y0;
+    if (x1 > maxX) maxX = x1; if (y1 > maxY) maxY = y1;
+  });
+  if (!isFinite(minX)) { minX = 0; minY = 0; maxX = stage.width(); maxY = stage.height(); }
+  const pad = 32;
+  // converter mundo → coordenadas do stage (com camera actual)
+  const url = stage.toDataURL({
+    x: minX * S.camera.scale + S.camera.x - pad,
+    y: minY * S.camera.scale + S.camera.y - pad,
+    width: (maxX - minX) * S.camera.scale + pad * 2,
+    height: (maxY - minY) * S.camera.scale + pad * 2,
+    pixelRatio: 2 / S.camera.scale,
+    mimeType: 'image/png',
+  });
+  const a = document.createElement('a');
+  a.href = url; a.download = 'tactical-grid.png';
+  document.body.appendChild(a); a.click(); a.remove();
+});
+
+document.getElementById('btn-save').addEventListener('click', saveJSON);
+function saveJSON() {
+  const data = JSON.stringify({ version: 1, cellSize: S.cellSize, objects: S.objects }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'tactical-grid.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('btn-load').addEventListener('click', () => fileJSON.click());
+fileJSON.addEventListener('change', (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const j = JSON.parse(r.result);
+      if (!j || !Array.isArray(j.objects)) throw new Error();
+      S.cellSize = Number(j.cellSize) || 48;
+      S.objects = j.objects.map(o => ({
+        id: o.id || uid(),
+        src: String(o.src || ''), name: String(o.name || 'object'),
+        x: Math.max(0, Math.round(o.x || 0)), y: Math.max(0, Math.round(o.y || 0)),
+        w: Math.max(1, Math.round(o.w || 1)), h: Math.max(1, Math.round(o.h || 1)),
+        rotation: Number(o.rotation) || 0, locked: !!o.locked,
+      }));
+      S.selectedIds = []; S.compareIds = [];
+      render();
+    } catch { alert('JSON inválido.'); }
+  };
+  r.readAsText(f);
+  fileJSON.value = '';
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   KEYBOARD
+═══════════════════════════════════════════════════════════════ */
+window.addEventListener('keydown', (e) => {
+  const tag = e.target?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'Delete' || e.key === 'Backspace') removeSelected();
+  else if (e.key === 'Escape') { S.selectedIds = []; S.compareIds = []; render(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveJSON(); }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   RESIZE + INIT
+═══════════════════════════════════════════════════════════════ */
+window.addEventListener('resize', () => {
+  stage.width(window.innerWidth);
+  stage.height(window.innerHeight);
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
+`;
+
+window._mountVTT = function() {
+  if (window._vttMounted) return;
+  window._vttMounted = true;
+  const root = document.getElementById("vtt-root");
+  if (!root) return;
+
+  // Create iframe with blob URL
+  const blob = new Blob([TACTICAL_HTML], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const iframe = document.createElement('iframe');
+  iframe.src = url;
+  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+  iframe.allow = 'fullscreen';
+  root.appendChild(iframe);
+
+  // Cleanup blob URL after load
+  iframe.onload = () => URL.revokeObjectURL(url);
+
+  setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
+};
 })();
 </script>
 </body>
