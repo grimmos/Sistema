@@ -686,7 +686,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
       <div class="dash-identity">
         <div class="dcard">
           <p class="dcard-title">Identidade</p>
-          <input class="id-char-name" id="char-name" type="text" placeholder="Nome do personagem..." maxlength="40" autocomplete="off" onchange="saveCharName()">
+          <input class="id-char-name" id="char-name" type="text" placeholder="Nome do personagem..." maxlength="40" autocomplete="off" oninput="saveCharName()">
           <div class="id-meta" id="id-meta-row">
             <!-- preenchido por renderIdentity() -->
           </div>
@@ -1135,11 +1135,32 @@ let masterUID = '';    // UID do mestre da sala
 let players  = {};
 let saveTimer = null;
 let dbListener = null;
+let dirtyUntil = {}; // pid -> ts: while em curso, ignorar updates remotos (evita race com schSave debounce)
 
 /* ═══════════════════════════════
    UTILS
 ═══════════════════════════════ */
 function $(id){ return document.getElementById(id); }
+
+// Escapa HTML para evitar XSS nos campos digitados pelo utilizador
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Marcar uma ficha como "em edição local" — listener remoto não vai sobrescrever durante esta janela
+function markDirty(pid){ if(pid) dirtyUntil[pid] = Date.now() + 2500; }
+function clearDirty(pid){ if(pid) delete dirtyUntil[pid]; }
+function isDirty(pid){ return !!(dirtyUntil[pid] && Date.now() < dirtyUntil[pid]); }
+
+// Devolve a ficha alvo OU null + toast — usar em mutadores para evitar escrever em objeto vazio
+function targetOrWarn(){
+  if(!isMaster) return me();
+  const tid = resolveTargetId();
+  if(!tid){ toast('Selecione um jogador na barra primeiro!'); return null; }
+  const p = players[tid];
+  if(!p){ toast('Jogador não encontrado.'); return null; }
+  return p;
+}
 
 let toastTimer = null;
 function toast(msg, ms=2400){
@@ -1195,6 +1216,7 @@ function isMe(){ return !isMaster && (viewId===myId || !viewId); }
 
 function setConn(ok){
   const dot=$('conn-dot'), txt=$('conn-txt');
+  if(!dot || !txt) return; // ainda na auth-screen / lobby — não há header
   dot.className='conn-dot'+(ok?'':' off');
   txt.textContent=ok?'online':'offline';
 }
@@ -1213,6 +1235,9 @@ function salaRef(path=''){
 }
 
 function schSave(){
+  // Marca o pid como "dirty" para o listener não sobrescrever durante o debounce
+  const tid = isMaster ? resolveTargetId() : myId;
+  if(tid) markDirty(tid);
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveNow, 600);
 }
@@ -1220,22 +1245,21 @@ function schSave(){
 function saveNow(){
   if(!firebaseOK){ return; }
   if(isMaster){
-    // #4: resolveTargetId como fonte única
     const tid = resolveTargetId();
     if(!tid) return;
     const p = players[tid];
     if(!p) return;
     p.lastUp = Date.now();
     db.ref(`salas/${salaId}/jogadores/${tid}`).set(p)
-      .then(()=>setConn(true))
-      .catch(e=>{ setConn(false); console.warn('Firebase write error:', e); });
+      .then(()=>{ setConn(true); clearDirty(tid); })
+      .catch(e=>{ setConn(false); clearDirty(tid); console.warn('Firebase write error:', e); });
     return;
   }
   const p = me();
   p.lastUp = Date.now();
   salaRef().set(p)
-    .then(()=>{ setConn(true); syncPerfilPermanente(); })
-    .catch(e=>{ setConn(false); console.warn('Firebase write error:', e); });
+    .then(()=>{ setConn(true); syncPerfilPermanente(); clearDirty(myId); })
+    .catch(e=>{ setConn(false); clearDirty(myId); console.warn('Firebase write error:', e); });
 }
 
 function attachListener(){
@@ -1254,12 +1278,24 @@ function attachListener(){
       return;
     }
     if(!data) return;
+    // Atualizar TODOS os jogadores — incluindo o próprio — para que edições do mestre
+    // se propaguem ao jogador em tempo real. Pular pids "dirty" para não esmagar
+    // edições locais ainda não salvas (anti-race do debounce).
     Object.entries(data).forEach(([pid, pdata]) => {
-      if(pid !== myId){ players[pid] = pdata; }
+      if(isDirty(pid)) return;
+      players[pid] = pdata;
+    });
+    // Remover jogadores que saíram da sala (não está no snapshot remoto)
+    Object.keys(players).forEach(pid => {
+      if(!data[pid] && pid !== myId) delete players[pid];
     });
     // actualizar masterUID se ainda não definido
     if(!masterUID && firebaseOK){
       db.ref('salas/'+salaId+'/mestre').once('value').then(s=>{ if(s.exists()) masterUID=s.val(); });
+    }
+    // Re-validar viewId caso o jogador observado tenha saído
+    if(viewId && !players[viewId]){
+      viewId = isMaster ? '' : myId;
     }
     // Mestre: auto-selecionar primeiro jogador se nenhum selecionado
     if(isMaster && (!viewId || viewId===myId || !players[viewId])){
@@ -1268,9 +1304,9 @@ function attachListener(){
     }
     setConn(true);
     renderPlayerBar();
-    if($('tab-grupo').classList.contains('active')) renderParty();
-    // se mestre está na ficha, atualizar ao vivo
-    if(isMaster && $('tab-ficha').classList.contains('active')) renderAll();
+    if($('tab-grupo') && $('tab-grupo').classList.contains('active')) renderParty();
+    // Re-render ficha para mestre OU jogador (ambos precisam de actualizar ao vivo)
+    if($('tab-ficha') && $('tab-ficha').classList.contains('active')) renderAll();
   }, err => {
     setConn(false);
     console.warn('Firebase listener error:', err);
@@ -1516,7 +1552,7 @@ function renderPlayerBar(){
     jogadores.forEach(([pid,p])=>{
       const c=document.createElement('button');
       c.className='pchip'+(pid===viewId?' active':'');
-      c.innerHTML=`<span class="pchip-dot"></span>${p.charName||p.name}`;
+      c.innerHTML=`<span class="pchip-dot"></span>${esc(p.charName||p.name)}`;
       c.onclick=()=>{ viewId=pid; renderAll(); };
       bar.appendChild(c);
     });
@@ -1529,7 +1565,7 @@ function renderPlayerBar(){
     if(pid===masterUID) return; // não mostrar chip do mestre para jogadores
     const c=document.createElement('button');
     c.className='pchip'+(pid===myId?' me':'')+(pid===viewId?' active':'');
-    c.innerHTML=`<span class="pchip-dot"></span>${p.charName||p.name}${pid===myId?' <small style="opacity:.45;font-size:8px;">(eu)</small>':''}`;
+    c.innerHTML=`<span class="pchip-dot"></span>${esc(p.charName||p.name)}${pid===myId?' <small style="opacity:.45;font-size:8px;">(eu)</small>':''}`;
     c.onclick=()=>{ if(pid===myId){ viewId=pid; renderAll(); } };
     bar.appendChild(c);
   });
@@ -1549,9 +1585,14 @@ function renderAll(){
       $('view-badge').textContent='✦ Aguardando jogadores...';
       $('view-badge').style.color='rgba(201,149,42,.5)';
       $('view-badge').classList.remove('hidden');
-      $('char-name').value=''; $('char-name').disabled=true;
+      if(document.activeElement !== $('char-name')) $('char-name').value='';
+      $('char-name').disabled=true;
       $('skill-list').innerHTML='<p style="font-style:italic;font-size:13px;color:rgba(201,149,42,.28);">Nenhum jogador na sala.</p>';
       $('bag-list').innerHTML=''; $('wound-list').innerHTML='';
+      // Esconder controlos de edição quando não há jogador
+      const qr=$('quick-strike-row'); if(qr) qr.style.display='none';
+      $('wound-add-row').style.display='none';
+      $('bag-add-row').style.display='none';
       return;
     }
     // garantir que viewId aponta para um jogador válido
@@ -1563,7 +1604,10 @@ function renderAll(){
     $('view-badge').style.color='#e08080';
     $('view-badge').style.letterSpacing='2px';
     $('view-badge').classList.remove('hidden');
-    $('char-name').value = p.charName||p.name||'';
+    // Não sobrescrever o input se o utilizador está a digitar nele
+    if(document.activeElement !== $('char-name')){
+      $('char-name').value = p.charName||p.name||'';
+    }
     $('char-name').disabled = false; // mestre pode editar nome
     renderIdentity(p);
     renderStrikes(p, true);   // mestre pode editar strikes
@@ -1583,7 +1627,9 @@ function renderAll(){
     $('view-badge').textContent='';
     $('view-badge').classList.add('hidden');
   }
-  $('char-name').value=editable?(p.charName||''):(p.charName||p.name);
+  if(document.activeElement !== $('char-name')){
+    $('char-name').value=editable?(p.charName||''):(p.charName||p.name);
+  }
   $('char-name').disabled=!editable;
   renderIdentity(p);
   renderStrikes(p,editable);
@@ -1610,7 +1656,7 @@ function renderLuck(p,editable){
 }
 
 function applyAtk(){
-  const p=target();
+  const p = targetOrWarn(); if(!p) return;
   p.luck=Math.max(0,Math.min(100,(p.luck!=null?p.luck:100)-parseInt($('sl-atk').value)*3));
   renderLuck(p,true); schSave();
 }
@@ -1630,7 +1676,8 @@ function renderStrikes(p,editable){
   const states=['','ferido','grave','crítico','moribundo','no limite','eliminado'];
   pl.textContent=pn===0?'sem penalidade':states[Math.min(pn,6)]||'no limite';
   const pr=$('pips'); pr.innerHTML='';
-  const show=Math.min(n+3,18);
+  // Mostrar pips até pelo menos 18 OU n+3 (caso strikes ultrapassem 18 — acumulativos)
+  const show=Math.max(18, Math.min(n+3, 30));
   for(let i=1;i<=show;i++){
     const pp=document.createElement('div');
     pp.className='pip'+(i<=n?' on':'')+(i%3===0?' m3':'');
@@ -1647,31 +1694,62 @@ function renderStrikes(p,editable){
     wl.appendChild(e);
   } else wounds.forEach((w,i)=>{
     const r=document.createElement('div'); r.className='wound-row';
-    r.innerHTML=`<span class="wound-badge">${w.qty} str</span><span class="wound-txt">${w.desc}</span>`
+    r.innerHTML=`<span class="wound-badge">${esc(w.qty)} str</span><span class="wound-txt">${esc(w.desc)}</span>`
       +(editable?`<button class="wound-rm" onclick="removeWound(${i})">✕</button>`:'');
     wl.appendChild(r);
   });
   $('wound-add-row').style.display=editable?'flex':'none';
+  // Linha de strikes rápidos (acumulativos, sem necessitar descrição)
+  let qr=$('quick-strike-row');
+  if(editable){
+    if(!qr){
+      qr=document.createElement('div');
+      qr.id='quick-strike-row';
+      qr.className='add-row';
+      qr.style.cssText='margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;';
+      qr.innerHTML=
+        '<button class="add-btn" onclick="quickStrike(1)">+1 strike</button>'+
+        '<button class="add-btn" onclick="quickStrike(2)">+2</button>'+
+        '<button class="add-btn" onclick="quickStrike(3)">+3</button>'+
+        '<button class="add-btn" style="border-color:rgba(120,200,120,.4);color:rgba(150,240,150,.9);" onclick="quickStrike(-1)">−1 (cura)</button>'+
+        '<button class="add-btn" style="border-color:rgba(120,200,120,.4);color:rgba(150,240,150,.9);" onclick="quickStrike(-3)">−3 (cura)</button>';
+      $('wound-add-row').parentNode.insertBefore(qr, $('wound-add-row'));
+    } else { qr.style.display='flex'; }
+  } else if(qr){ qr.style.display='none'; }
+}
+
+// Adiciona strikes acumulativos sem exigir descrição de ferimento
+function quickStrike(delta){
+  const p = targetOrWarn(); if(!p) return;
+  const before = p.totalStrikes||0;
+  p.totalStrikes = Math.max(0, before + delta);
+  renderStrikes(p, true); schSave();
+  if(delta>0) toast('✕ +'+delta+' strike(s) — total '+p.totalStrikes);
+  else        toast('✦ '+Math.abs(delta)+' strike(s) curado(s) — total '+p.totalStrikes);
 }
 
 function addWound(){
-  const qty=parseInt($('w-qty').value)||1;
+  // qty fica restrito a 1..18 (sem valores negativos ou disparates)
+  let qty = parseInt($('w-qty').value);
+  if(!Number.isFinite(qty) || qty<1) qty = 1;
+  qty = Math.min(18, qty);
   const desc=$('w-desc').value.trim();
   if(!desc){ toast('Descreva o ferimento!'); return; }
-  const p=target();
+  const p = targetOrWarn(); if(!p) return;
   p.wounds=p.wounds||[];
   p.wounds.push({qty,desc});
   p.totalStrikes=(p.totalStrikes||0)+qty;
   $('w-qty').value=1; $('w-desc').value='';
   renderStrikes(p,true); schSave();
-  toast('✕ '+qty+' strike(s) adicionado(s)');
+  toast('✕ '+qty+' strike(s) — total '+p.totalStrikes);
 }
 
 function removeWound(i){
-  const p=target();
-  // #14: wound.qty pode ser undefined em dados importados — guard com parseInt
-  const qty = parseInt(p.wounds[i]?.qty) || 0;
-  p.totalStrikes=Math.max(0,(p.totalStrikes||0)-qty);
+  const p = targetOrWarn(); if(!p) return;
+  if(!p.wounds || !p.wounds[i]) return;
+  // wound.qty pode ser undefined em dados importados — guard com parseInt
+  const qty = parseInt(p.wounds[i].qty) || 0;
+  p.totalStrikes = Math.max(0, (p.totalStrikes||0) - qty);
   p.wounds.splice(i,1);
   renderStrikes(p,true); schSave();
 }
@@ -1702,7 +1780,7 @@ function renderSkillsMaster(p){
     const curMod=sk.modifier||0;
     card.innerHTML=`
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-        <span style="font-family:'Cinzel',serif;font-size:13px;color:var(--gold2);">${sk.name}</span>
+        <span style="font-family:'Cinzel',serif;font-size:13px;color:var(--gold2);">${esc(sk.name)}</span>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
           <button class="roll-btn" style="padding:4px 8px;font-size:9px;" onclick="masterSkillLevel('${sk.id}',-1)" ${sk.level<=1?'disabled':''}>−</button>
           <span style="font-family:'Cinzel',serif;font-size:11px;color:rgba(201,149,42,.7);min-width:70px;text-align:center;">${LVL_LBL[sk.level]}</span>
@@ -1720,9 +1798,10 @@ function renderSkillsMaster(p){
 
 function masterAddSkill(){
   const nameEl=$('master-sk-name'), lvlEl=$('master-sk-lvl');
-  const name=nameEl.value.trim(), level=parseInt(lvlEl.value)||1;
+  const name=nameEl.value.trim(), level=Math.min(5,Math.max(1,parseInt(lvlEl.value)||1));
   if(!name){ toast('Digite o nome da perícia!'); return; }
-  const p=vd(); p.skills=p.skills||[];
+  const p = targetOrWarn(); if(!p) return;
+  p.skills=p.skills||[];
   const nid=name.toLowerCase().replace(/\s+/g,'_')+'_'+genId().slice(0,4);
   p.skills.push({id:nid,name,level,rolling:false});
   nameEl.value='';
@@ -1731,7 +1810,7 @@ function masterAddSkill(){
 }
 
 function masterSkillLevel(skId, delta){
-  const p=vd(); if(!p.skills) return;
+  const p = targetOrWarn(); if(!p || !p.skills) return;
   const sk=p.skills.find(s=>s.id===skId); if(!sk) return;
   sk.level=Math.min(5,Math.max(1,sk.level+delta));
   renderSkillsMaster(p); schSave();
@@ -1739,7 +1818,7 @@ function masterSkillLevel(skId, delta){
 }
 
 function masterSkillModifier(skId, delta){
-  const p=vd(); if(!p.skills) return;
+  const p = targetOrWarn(); if(!p || !p.skills) return;
   const sk=p.skills.find(s=>s.id===skId); if(!sk) return;
   sk.modifier=(sk.modifier||0)+delta;
   renderSkillsMaster(p); schSave();
@@ -1747,7 +1826,7 @@ function masterSkillModifier(skId, delta){
 }
 
 function masterRemoveSkill(skId){
-  const p=vd(); if(!p.skills) return;
+  const p = targetOrWarn(); if(!p || !p.skills) return;
   const idx=p.skills.findIndex(s=>s.id===skId); if(idx<0) return;
   const name=p.skills[idx].name;
   p.skills.splice(idx,1);
@@ -1773,7 +1852,7 @@ function renderSkills(p,editable){
       :'';
     card.innerHTML=`
       <div class="skill-hdr">
-        <span class="skill-name">${sk.name}${modBadge}</span>
+        <span class="skill-name">${esc(sk.name)}${modBadge}</span>
         <span class="skill-lvl-badge ${max?'max':''}">${LVL_LBL[sk.level]}</span>
       </div>
       <div class="dice-row" id="dr-${sk.id}">${dice}</div>
@@ -1936,7 +2015,7 @@ function renderBag(p,editable){
     e.textContent='Mochila vazia.'; bl.appendChild(e);
   } else bag.forEach((item,i)=>{
     const r=document.createElement('div'); r.className='bag-item';
-    r.innerHTML=`<span class="bag-num">${i+1}</span><span class="bag-name">${item}</span>`
+    r.innerHTML=`<span class="bag-num">${i+1}</span><span class="bag-name">${esc(item)}</span>`
       +(editable?`<button class="bag-rm" onclick="removeBagItem(${i})">✕</button>`:'');
     bl.appendChild(r);
   });
@@ -1946,11 +2025,16 @@ function renderBag(p,editable){
 function addBagItem(){
   const inp=$('bag-inp'), v=inp.value.trim();
   if(!v){ toast('Digite um item!'); return; }
-  const p=target(); p.bag=p.bag||[]; p.bag.push(v); inp.value='';
+  const p = targetOrWarn(); if(!p) return;
+  p.bag=p.bag||[]; p.bag.push(v); inp.value='';
   renderBag(p,true); schSave();
 }
 
-function removeBagItem(i){ const p=target(); p.bag.splice(i,1); renderBag(p,true); schSave(); }
+function removeBagItem(i){
+  const p = targetOrWarn(); if(!p) return;
+  if(!p.bag || !p.bag[i]) return;
+  p.bag.splice(i,1); renderBag(p,true); schSave();
+}
 
 /* ═══════════════════════════════
    GRUPO (view em tempo real)
@@ -1972,21 +2056,21 @@ function renderParty(){
     const luckPct=p.luck!=null?p.luck:100;
     card.innerHTML=`
       <div class="party-hdr">
-        <span class="party-name">${p.charName||p.name}</span>
+        <span class="party-name">${esc(p.charName||p.name)}</span>
         <div style="display:flex;align-items:center;gap:8px;">
           ${pid===masterUID ? '<span style="font-family:\'Cinzel\',serif;font-size:9px;letter-spacing:2px;background:rgba(122,26,26,.2);border:1px solid rgba(160,32,32,.4);border-radius:10px;padding:2px 8px;color:#e08080;">✦ Mestre</span>' : ''}
           ${pid===myId ? '<span style="font-family:\'Cinzel\',serif;font-size:9px;letter-spacing:2px;background:rgba(201,149,42,.1);border:1px solid rgba(201,149,42,.28);border-radius:10px;padding:2px 8px;color:var(--gold);">você</span>' : ''}
           <span class="party-sync-badge">● online</span>
         </div>
       </div>
-      ${p.bio?`<div style="margin-bottom:6px;"><span style="font-size:12px;color:rgba(244,234,208,.4);font-style:italic;">${p.bio}</span></div>`:''}
+      ${p.bio?`<div style="margin-bottom:6px;"><span style="font-size:12px;color:rgba(244,234,208,.4);font-style:italic;">${esc(p.bio)}</span></div>`:''}
       <div class="party-stats">
         <span>Perícias: <strong style="color:var(--gold2);">${(p.skills||[]).length}</strong></span>
         <span>Strikes: <strong style="color:${n>=12?'#e08080':'var(--gold2)'};">${n}</strong></span>
         ${pn>0?`<span style="color:#e08080;">Pen: −${pn}</span>`:''}
         <span>Sorte: <strong style="color:${luckPct<18?'#e08080':luckPct<40?'#e8d040':'var(--gold2)'};">${luckPct}%</strong></span>
       </div>
-      ${skHigh.length?`<div class="party-skills-row">${skHigh.map(s=>`<span class="p-skill-pill">${s.name} ${['','I','II','III','IV','V'][s.level]||''}</span>`).join('')}</div>`:''}
+      ${skHigh.length?`<div class="party-skills-row">${skHigh.map(s=>`<span class="p-skill-pill">${esc(s.name)} ${['','I','II','III','IV','V'][s.level]||''}</span>`).join('')}</div>`:''}
       <div style="margin-top:10px;">
         ${(isMaster || pid===myId) ? `<button class="roll-btn" onclick="switchView('${pid}')">${pid===myId?'Minha ficha':isMaster?'Ver ficha ✦':'Ver ficha →'}</button>` : ''}
       </div>`;
@@ -2015,12 +2099,12 @@ function renderIdentity(p){
     const b = document.createElement('span');
     b.className = 'id-badge';
     b.style.cssText = 'background:rgba(201,149,42,.04);border-color:rgba(201,149,42,.15);color:rgba(201,149,42,.4);';
-    b.textContent = 'Jogador: ' + p.name;
+    b.textContent = 'Jogador: ' + p.name; // textContent já escapa
     row.appendChild(b);
   }
   if(p.bio){
     const s = document.createElement('span');
-    s.className = 'id-bio-txt'; s.textContent = p.bio;
+    s.className = 'id-bio-txt'; s.textContent = p.bio; // textContent já escapa
     row.appendChild(s);
   }
 }
@@ -2402,9 +2486,9 @@ async function encerrarSessao(){
    CHAR NAME
 ═══════════════════════════════ */
 function saveCharName(){
-  const p = isMaster ? vd() : target();
-  if(p) p.charName=$('char-name').value;
-  schSave();
+  const p = targetOrWarn(); if(!p) return;
+  p.charName = $('char-name').value;
+  schSave(); // autosave em tempo real (oninput) — listener propaga ao outro lado
 }
 
 /* ═══════════════════════════════
@@ -2428,7 +2512,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if(slLuck)   slLuck.addEventListener('input', ()=>{
     const v=parseInt(slLuck.value);
     $('sl-luck-out').textContent=v+'%';
-    target().luck=v; renderLuck(target(),true); schSave();
+    const p = targetOrWarn(); if(!p) return;
+    p.luck = Math.max(0, Math.min(100, v));
+    renderLuck(p, true); schSave();
   });
   if(slAtk) slAtk.addEventListener('input', ()=>{ $('sl-atk-out').textContent=slAtk.value; });
 });
