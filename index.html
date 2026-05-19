@@ -557,7 +557,23 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 .session-btn.end{border:1px solid rgba(160,32,32,.4);background:rgba(122,26,26,.15);color:#e08080;}
 .session-btn.end:active{background:rgba(122,26,26,.3);}
 
+
+/* ══ ABA: MAPA VTT ══ */
+#tab-mapa {
+  padding: 0 !important;
+  height: calc(100vh - 110px);
+  min-height: 500px;
+  overflow: hidden;
+}
+#vtt-root {
+  width: 100%;
+  height: 100%;
+}
 </style>
+<!-- React + Babel para o VTTGrid -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
 
@@ -673,6 +689,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
       <button class="mnav-btn" id="nav-multi" onclick="showTab('multi',this)">Mecânicas</button>
       <button class="mnav-btn" id="nav-grupo" onclick="showTab('grupo',this)">Grupo</button>
       <button class="mnav-btn" id="nav-perfil" onclick="showTab('perfil',this)">Perfil</button>
+      <button class="mnav-btn" id="nav-mapa" onclick="showTab('mapa',this)">Mapa</button>
     </div>
   </div>
 
@@ -1023,6 +1040,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
     <p style="font-family:Cinzel,serif;font-size:9px;letter-spacing:2px;color:rgba(201,149,42,.25);text-align:center;margin-top:10px;" id="pid-txt"></p>
   </div>
 
+
+  <!-- ABA: MAPA VTT -->
+  <div class="chapter" id="tab-mapa">
+    <div id="vtt-root"></div>
+  </div>
 
 </div><!-- /wrap -->
 </div><!-- /app -->
@@ -2535,6 +2557,649 @@ document.addEventListener('DOMContentLoaded', () => {
   if(slAtk) slAtk.addEventListener('input', ()=>{ $('sl-atk-out').textContent=slAtk.value; });
 });
 
+</script>
+
+<!-- ══════════════════════════════════════════════
+     VTT GRID — React Component (compilado via Babel)
+══════════════════════════════════════════════ -->
+<script type="text/babel" data-presets="react">
+(function(){
+const { useState, useRef, useCallback, useEffect, useMemo } = React;
+
+const CELL_SIZE_DEFAULT = 40;
+const ZOOM_MIN  = 0.25;
+const ZOOM_MAX  = 4;
+const ZOOM_STEP = 0.001;
+const GRID_COLOR_DARK  = "#2e2e2e";
+const BG_COLOR_DARK    = "#1a1a1a";
+
+const DRAW_COLORS = [
+  { label: "Branco",   value: "#ffffff" },
+  { label: "Vermelho", value: "#e05252" },
+  { label: "Laranja",  value: "#e09a3a" },
+  { label: "Amarelo",  value: "#d4c84a" },
+  { label: "Verde",    value: "#52c47a" },
+  { label: "Ciano",    value: "#4ac4c4" },
+  { label: "Azul",     value: "#5278e0" },
+  { label: "Roxo",     value: "#9a52e0" },
+  { label: "Rosa",     value: "#e052b4" },
+  { label: "Preto",    value: "#1a1a1a" },
+];
+const BRUSH_SIZES = [2, 4, 8, 14, 22];
+const MAP_DEFAULT_CELLS = 20;
+const FOG_BRUSH_CELLS = [1, 2, 3, 5];
+
+function useRole(role) {
+  const isGM = role === "GM";
+  return { isGM, isPlayer: !isGM, canEdit: isGM, canDraw: isGM, canFog: isGM, canMove: isGM, canZoom: true, canPan: true };
+}
+
+function useCamera() {
+  const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
+  const isPanning  = useRef(false);
+  const lastMouse  = useRef({ x: 0, y: 0 });
+
+  const onWheel = useCallback((e) => {
+    e.preventDefault();
+    setCamera((cam) => {
+      const delta     = -e.deltaY * ZOOM_STEP;
+      const nextScale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, cam.scale + delta * cam.scale));
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mx   = e.clientX - rect.left;
+      const my   = e.clientY - rect.top;
+      const ratio = nextScale / cam.scale;
+      return { scale: nextScale, x: mx - (mx - cam.x) * ratio, y: my - (my - cam.y) * ratio };
+    });
+  }, []);
+
+  const onMouseDown = useCallback((e) => {
+    if (e.button === 1 || e.currentTarget.dataset.panMode === "true") {
+      isPanning.current = true;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
+      e.currentTarget.style.cursor = "grabbing";
+    }
+  }, []);
+
+  const onMouseMove = useCallback((e) => {
+    if (!isPanning.current) return;
+    const dx = e.clientX - lastMouse.current.x;
+    const dy = e.clientY - lastMouse.current.y;
+    lastMouse.current = { x: e.clientX, y: e.clientY };
+    setCamera((cam) => ({ ...cam, x: cam.x + dx, y: cam.y + dy }));
+  }, []);
+
+  const onMouseUp = useCallback((e) => {
+    if (isPanning.current) { isPanning.current = false; e.currentTarget.style.cursor = ""; }
+  }, []);
+
+  const onMouseLeave = useCallback((e) => {
+    if (isPanning.current) { isPanning.current = false; e.currentTarget.style.cursor = ""; }
+  }, []);
+
+  return { camera, setCamera, isPanning, cameraHandlers: { onWheel, onMouseDown, onMouseMove, onMouseUp, onMouseLeave } };
+}
+
+function useMapImage() {
+  const [mapTransform, setMapTransform] = useState(null);
+  const loadMap = useCallback((file) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const ratio = img.naturalHeight / img.naturalWidth;
+      const w = MAP_DEFAULT_CELLS;
+      setMapTransform({ src: url, x: 0, y: 0, w, h: Math.round(w * ratio) });
+    };
+    img.src = url;
+  }, []);
+  const updateMapTransform = useCallback((updater) => {
+    setMapTransform((prev) => (prev ? { ...prev, ...updater } : prev));
+  }, []);
+  const clearMap = useCallback(() => {
+    setMapTransform((prev) => { if (prev?.src) URL.revokeObjectURL(prev.src); return null; });
+  }, []);
+  return { mapTransform, loadMap, updateMapTransform, clearMap };
+}
+
+function useDrawing() {
+  const [paths, setPaths] = useState([]);
+  const activePathId = useRef(null);
+  const startPath = useCallback((point, color, size, opacity = 1) => {
+    const id = `path-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    activePathId.current = id;
+    setPaths((prev) => [...prev, { id, points: [point], color, size, opacity }]);
+  }, []);
+  const extendPath = useCallback((point) => {
+    if (!activePathId.current) return;
+    const id = activePathId.current;
+    setPaths((prev) => prev.map((p) => p.id === id ? { ...p, points: [...p.points, point] } : p));
+  }, []);
+  const endPath  = useCallback(() => { activePathId.current = null; }, []);
+  const undoLast = useCallback(() => setPaths((prev) => prev.slice(0, -1)), []);
+  const clearAll = useCallback(() => setPaths([]), []);
+  return { paths, startPath, extendPath, endPath, undoLast, clearAll };
+}
+
+function useFog() {
+  const [fogCells, setFogCells] = useState(new Set());
+  const paintFogCells = useCallback((cells) => {
+    setFogCells((prev) => { const next = new Set(prev); cells.forEach(([c, r]) => next.add(`${c},${r}`)); return next; });
+  }, []);
+  const eraseFogCells = useCallback((cells) => {
+    setFogCells((prev) => { const next = new Set(prev); cells.forEach(([c, r]) => next.delete(`${c},${r}`)); return next; });
+  }, []);
+  const clearFog = useCallback(() => setFogCells(new Set()), []);
+  const fillFog = useCallback((gridCols, gridRows) => {
+    const next = new Set();
+    for (let c = 0; c < gridCols; c++) for (let r = 0; r < gridRows; r++) next.add(`${c},${r}`);
+    setFogCells(next);
+  }, []);
+  return { fogCells, paintFogCells, eraseFogCells, clearFog, fillFog };
+}
+
+function GridLines({ camera, cellSize, width, height }) {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = BG_COLOR_DARK;
+    ctx.fillRect(0, 0, width, height);
+    const scaledCell = cellSize * camera.scale;
+    if (scaledCell < 4) return;
+    const offsetX = ((camera.x % scaledCell) + scaledCell) % scaledCell;
+    const offsetY = ((camera.y % scaledCell) + scaledCell) % scaledCell;
+    ctx.beginPath();
+    ctx.strokeStyle = GRID_COLOR_DARK;
+    ctx.lineWidth   = camera.scale > 1.5 ? 1 : 0.5;
+    for (let x = offsetX; x <= width; x += scaledCell) { ctx.moveTo(x, 0); ctx.lineTo(x, height); }
+    for (let y = offsetY; y <= height; y += scaledCell) { ctx.moveTo(0, y); ctx.lineTo(width, y); }
+    ctx.stroke();
+  }, [camera, cellSize, width, height]);
+  return <canvas ref={canvasRef} width={width} height={height} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }} />;
+}
+
+function MapImageLayer({ mapTransform, cellSize, canEdit, onUpdate }) {
+  const isDragging = useRef(false);
+  const isResizing = useRef(null);
+  const dragStart  = useRef({ mx: 0, my: 0, tx: 0, ty: 0, tw: 0, th: 0 });
+  if (!mapTransform) return null;
+  const px = mapTransform.x * cellSize;
+  const py = mapTransform.y * cellSize;
+  const pw = mapTransform.w * cellSize;
+  const ph = mapTransform.h * cellSize;
+
+  const onImgMouseDown = (e) => {
+    if (!canEdit || isResizing.current) return;
+    e.stopPropagation();
+    isDragging.current = true;
+    dragStart.current = { mx: e.clientX, my: e.clientY, tx: mapTransform.x, ty: mapTransform.y };
+    const onMove = (ev) => {
+      if (!isDragging.current) return;
+      const scale = parseFloat(e.currentTarget.closest("[data-layer=world]")?.style.transform.match(/scale\(([^)]+)\)/)?.[1] ?? 1);
+      const dx = (ev.clientX - dragStart.current.mx) / scale;
+      const dy = (ev.clientY - dragStart.current.my) / scale;
+      onUpdate({ x: dragStart.current.tx + dx / cellSize, y: dragStart.current.ty + dy / cellSize });
+    };
+    const onUp = () => { isDragging.current = false; window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const onHandleMouseDown = (handle) => (e) => {
+    if (!canEdit) return;
+    e.stopPropagation();
+    isResizing.current = handle;
+    dragStart.current = { mx: e.clientX, my: e.clientY, tx: mapTransform.x, ty: mapTransform.y, tw: mapTransform.w, th: mapTransform.h };
+    const scale = parseFloat(e.currentTarget.closest("[data-layer=world]")?.style.transform.match(/scale\(([^)]+)\)/)?.[1] ?? 1);
+    const onMove = (ev) => {
+      const dx = (ev.clientX - dragStart.current.mx) / scale / cellSize;
+      const dy = (ev.clientY - dragStart.current.my) / scale / cellSize;
+      const d = dragStart.current;
+      let { tx, ty, tw, th } = d;
+      if (handle.includes("e")) tw = Math.max(1, d.tw + dx);
+      if (handle.includes("s")) th = Math.max(1, d.th + dy);
+      if (handle.includes("w")) { tx = d.tx + dx; tw = Math.max(1, d.tw - dx); }
+      if (handle.includes("n")) { ty = d.ty + dy; th = Math.max(1, d.th - dy); }
+      onUpdate({ x: tx, y: ty, w: tw, h: th });
+    };
+    const onUp = () => { isResizing.current = null; window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const handles = [
+    { id: "nw", cx: px, cy: py }, { id: "n", cx: px + pw / 2, cy: py }, { id: "ne", cx: px + pw, cy: py },
+    { id: "e", cx: px + pw, cy: py + ph / 2 }, { id: "se", cx: px + pw, cy: py + ph },
+    { id: "s", cx: px + pw / 2, cy: py + ph }, { id: "sw", cx: px, cy: py + ph }, { id: "w", cx: px, cy: py + ph / 2 },
+  ];
+  const cursorMap = { nw:"nw-resize", n:"n-resize", ne:"ne-resize", e:"e-resize", se:"se-resize", s:"s-resize", sw:"sw-resize", w:"w-resize" };
+
+  return (
+    <g style={{ pointerEvents: canEdit ? "auto" : "none" }}>
+      <image href={mapTransform.src} x={px} y={py} width={pw} height={ph} preserveAspectRatio="xMidYMid meet"
+        style={{ cursor: canEdit ? "move" : "default" }} onMouseDown={onImgMouseDown} />
+      {canEdit && <rect x={px} y={py} width={pw} height={ph} fill="none" stroke="rgba(80,180,255,0.7)" strokeWidth={1.5} strokeDasharray="6 3" style={{ pointerEvents: "none" }} />}
+      {canEdit && handles.map(({ id, cx, cy }) => (
+        <rect key={id} x={cx - 5} y={cy - 5} width={10} height={10} rx={2} fill="rgba(30,140,255,0.9)" stroke="#fff" strokeWidth={1}
+          style={{ cursor: cursorMap[id] }} onMouseDown={onHandleMouseDown(id)} />
+      ))}
+    </g>
+  );
+}
+
+function DrawingLayer({ paths, camera, width, height }) {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, width, height);
+    ctx.save();
+    ctx.translate(camera.x, camera.y);
+    ctx.scale(camera.scale, camera.scale);
+    for (const path of paths) {
+      if (path.points.length < 2) continue;
+      ctx.beginPath();
+      ctx.strokeStyle = path.color;
+      ctx.lineWidth   = path.size;
+      ctx.globalAlpha = path.opacity ?? 1;
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.moveTo(path.points[0].x, path.points[0].y);
+      for (let i = 1; i < path.points.length; i++) ctx.lineTo(path.points[i].x, path.points[i].y);
+      ctx.stroke();
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }, [paths, camera, width, height]);
+  return <canvas ref={canvasRef} width={width} height={height} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none", zIndex: 3 }} />;
+}
+
+function DrawingCanvas({ camera, width, height, brushColor, brushSize, onStart, onExtend, onEnd }) {
+  const isDrawing = useRef(false);
+  const screenToWorld = useCallback((e, rect) => ({
+    x: (e.clientX - rect.left - camera.x) / camera.scale,
+    y: (e.clientY - rect.top  - camera.y) / camera.scale,
+  }), [camera]);
+  const onMouseDown = useCallback((e) => {
+    if (e.button !== 0) return;
+    isDrawing.current = true;
+    const rect = e.currentTarget.getBoundingClientRect();
+    onStart(screenToWorld(e, rect), brushColor, brushSize);
+  }, [onStart, screenToWorld, brushColor, brushSize]);
+  const onMouseMove = useCallback((e) => {
+    if (!isDrawing.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    onExtend(screenToWorld(e, rect));
+  }, [onExtend, screenToWorld]);
+  const onMouseUp    = useCallback(() => { isDrawing.current = false; onEnd(); }, [onEnd]);
+  const onMouseLeave = useCallback(() => { if (isDrawing.current) { isDrawing.current = false; onEnd(); } }, [onEnd]);
+  return <canvas width={width} height={height} style={{ position: "absolute", top: 0, left: 0, cursor: "crosshair", zIndex: 5 }}
+    onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseLeave} />;
+}
+
+function FogLayer({ fogCells, camera, cellSize, width, height, isGM }) {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, width, height);
+    if (fogCells.size === 0) return;
+    ctx.save();
+    ctx.translate(camera.x, camera.y);
+    ctx.scale(camera.scale, camera.scale);
+    for (const key of fogCells) {
+      const [col, row] = key.split(",").map(Number);
+      const px = col * cellSize, py = row * cellSize;
+      if (isGM) {
+        ctx.fillStyle = "rgba(0,0,0,0.42)";
+        ctx.fillRect(px, py, cellSize, cellSize);
+        ctx.strokeStyle = "rgba(160,80,255,0.75)";
+        ctx.lineWidth = 1 / camera.scale;
+        ctx.setLineDash([3 / camera.scale, 2 / camera.scale]);
+        ctx.strokeRect(px + 0.5, py + 0.5, cellSize - 1, cellSize - 1);
+        ctx.setLineDash([]);
+      } else {
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(px, py, cellSize, cellSize);
+      }
+    }
+    ctx.restore();
+  }, [fogCells, camera, cellSize, width, height, isGM]);
+  return <canvas ref={canvasRef} width={width} height={height} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none", zIndex: 7 }} />;
+}
+
+function FogPaintCanvas({ camera, cellSize, width, height, fogBrushCells, onPaint, onErase }) {
+  const isPainting = useRef(false);
+  const isErasing  = useRef(false);
+  const lastCell   = useRef(null);
+  const screenToCell = useCallback((e, rect) => ({
+    col: Math.floor((e.clientX - rect.left  - camera.x) / camera.scale / cellSize),
+    row: Math.floor((e.clientY - rect.top   - camera.y) / camera.scale / cellSize),
+  }), [camera, cellSize]);
+  const brushCells = useCallback((col, row) => {
+    const cells = [], half = Math.floor(fogBrushCells / 2);
+    for (let dc = 0; dc < fogBrushCells; dc++)
+      for (let dr = 0; dr < fogBrushCells; dr++)
+        cells.push([col - half + dc, row - half + dr]);
+    return cells;
+  }, [fogBrushCells]);
+  const apply = useCallback((col, row, erase) => {
+    erase ? onErase(brushCells(col, row)) : onPaint(brushCells(col, row));
+  }, [brushCells, onPaint, onErase]);
+  const onMouseDown = useCallback((e) => {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const { col, row } = screenToCell(e, rect);
+    if (e.button === 2) { isErasing.current = true; apply(col, row, true); }
+    else { isPainting.current = true; apply(col, row, false); }
+    lastCell.current = { col, row };
+  }, [screenToCell, apply]);
+  const onMouseMove = useCallback((e) => {
+    if (!isPainting.current && !isErasing.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const { col, row } = screenToCell(e, rect);
+    if (lastCell.current?.col === col && lastCell.current?.row === row) return;
+    lastCell.current = { col, row };
+    apply(col, row, isErasing.current);
+  }, [screenToCell, apply]);
+  const onMouseUp = useCallback(() => { isPainting.current = false; isErasing.current = false; }, []);
+  return <canvas width={width} height={height}
+    style={{ position: "absolute", top: 0, left: 0, cursor: "cell", zIndex: 9 }}
+    onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+    onContextMenu={(e) => e.preventDefault()} />;
+}
+
+const sectionStyle = { background:"rgba(20,20,20,0.82)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:8, padding:"6px 8px", display:"flex", flexDirection:"column", gap:5, backdropFilter:"blur(4px)" };
+const labelStyle   = { fontSize:10, color:"rgba(180,170,160,0.7)", textTransform:"uppercase", letterSpacing:"0.08em", userSelect:"none" };
+
+function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog }) {
+  const fileRef = useRef(null);
+  const toolBtn = (id, label, title) => ({
+    onClick: () => setActiveTool(id), title,
+    style: { padding:"5px 10px", borderRadius:6, border:`1px solid ${activeTool===id?"rgba(80,180,255,0.8)":"rgba(255,255,255,0.12)"}`, background:activeTool===id?"rgba(40,120,220,0.35)":"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12, userSelect:"none", whiteSpace:"nowrap" },
+  });
+  const actionBtn = (onClick, label, title, danger=false) => ({
+    onClick, title,
+    style: { padding:"5px 10px", borderRadius:6, border:`1px solid ${danger?"rgba(220,60,40,0.5)":"rgba(255,255,255,0.12)"}`, background:danger?"rgba(180,40,20,0.3)":"rgba(30,30,30,0.75)", color:danger?"#f0a090":"#b0aaa4", cursor:"pointer", fontSize:12, userSelect:"none" },
+  });
+  return (
+    <div style={{ position:"absolute", top:12, left:12, display:"flex", flexDirection:"column", gap:6, zIndex:20 }}>
+      <div style={sectionStyle}>
+        <span style={labelStyle}>Ferramenta</span>
+        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+          <button {...toolBtn("select","Mover","Mover (V)")}>↖ Mover</button>
+          <button {...toolBtn("draw","Caneta","Caneta (P)")}>✏ Caneta</button>
+          <button {...toolBtn("fog","Névoa","Névoa (F)")} style={{ ...toolBtn("fog").style, borderColor:activeTool==="fog"?"rgba(160,80,255,0.8)":"rgba(255,255,255,0.12)", background:activeTool==="fog"?"rgba(80,20,140,0.5)":"rgba(30,30,30,0.75)", color:activeTool==="fog"?"#d8b4fe":"#e0ddd8" }}>🌫 Névoa</button>
+        </div>
+      </div>
+      <div style={sectionStyle}>
+        <span style={labelStyle}>Mapa</span>
+        <div style={{ display:"flex", gap:4 }}>
+          <button onClick={() => fileRef.current?.click()} style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(255,255,255,0.12)", background:"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>📂 Carregar</button>
+          {hasMap && <button {...actionBtn(onMapClear,"Remover","Remover mapa",true)}>🗑 Remover</button>}
+          <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={(e) => { onMapUpload(e.target.files[0]); e.target.value=""; }} />
+        </div>
+      </div>
+      {activeTool === "draw" && (
+        <>
+          <div style={sectionStyle}>
+            <span style={labelStyle}>Cor</span>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:4, maxWidth:148 }}>
+              {DRAW_COLORS.map(({ value, label }) => (
+                <button key={value} title={label} onClick={() => setBrushColor(value)} style={{ width:20, height:20, borderRadius:"50%", background:value, padding:0, flexShrink:0, cursor:"pointer", border:brushColor===value?"2px solid rgba(80,180,255,0.9)":"2px solid rgba(255,255,255,0.15)" }} />
+              ))}
+            </div>
+          </div>
+          <div style={sectionStyle}>
+            <span style={labelStyle}>Espessura</span>
+            <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+              {BRUSH_SIZES.map((s) => (
+                <button key={s} title={`${s}px`} onClick={() => setBrushSize(s)} style={{ width:28, height:28, borderRadius:"50%", cursor:"pointer", padding:0, background:brushSize===s?"rgba(40,120,220,0.4)":"rgba(30,30,30,0.75)", border:brushSize===s?"1px solid rgba(80,180,255,0.8)":"1px solid rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <div style={{ width:Math.min(s,16), height:Math.min(s,16), borderRadius:"50%", background:brushColor }} />
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={sectionStyle}>
+            <span style={labelStyle}>Ações</span>
+            <div style={{ display:"flex", gap:4 }}>
+              <button {...actionBtn(onUndoDraw,"Desfazer","Ctrl+Z")}>↩ Desfazer</button>
+              <button {...actionBtn(onClearDraw,"Limpar","Limpar desenhos",true)}>🗑 Limpar</button>
+            </div>
+          </div>
+        </>
+      )}
+      {activeTool === "fog" && (
+        <>
+          <div style={{ ...sectionStyle, borderColor:"rgba(160,80,255,0.3)", background:"rgba(60,20,80,0.55)" }}>
+            <span style={{ ...labelStyle, color:"rgba(200,150,255,0.8)" }}>Modo Névoa</span>
+            <div style={{ fontSize:11, color:"rgba(180,140,220,0.9)", lineHeight:1.5 }}>
+              <div>🖱️ <b>Esquerdo</b>: pintar névoa</div>
+              <div>🖱️ <b>Direito</b>: apagar névoa</div>
+            </div>
+          </div>
+          <div style={sectionStyle}>
+            <span style={labelStyle}>Pincel (células)</span>
+            <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+              {FOG_BRUSH_CELLS.map((n) => (
+                <button key={n} title={`${n}×${n} células`} onClick={() => setFogBrushCells(n)} style={{ width:32, height:28, borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600, background:fogBrushCells===n?"rgba(120,40,220,0.5)":"rgba(30,30,30,0.75)", border:fogBrushCells===n?"1px solid rgba(160,80,255,0.8)":"1px solid rgba(255,255,255,0.12)", color:fogBrushCells===n?"#d8b4fe":"#9a9690" }}>
+                  {n}×{n}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={sectionStyle}>
+            <span style={labelStyle}>Ações Rápidas</span>
+            <div style={{ display:"flex", gap:4, flexDirection:"column" }}>
+              <button onClick={onFillFog} style={{ padding:"5px 10px", borderRadius:6, cursor:"pointer", fontSize:12, textAlign:"left", border:"1px solid rgba(160,80,255,0.3)", background:"rgba(80,20,120,0.35)", color:"#d8b4fe" }}>■ Cobrir tudo com névoa</button>
+              <button {...actionBtn(onClearFog,"Revelar","Remover toda névoa",true)}>☀ Revelar tudo</button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function RoleBadge({ role }) {
+  const isGM = role === "GM";
+  return (
+    <div style={{ position:"absolute", top:12, right:12, padding:"4px 12px", borderRadius:20, fontSize:12, fontWeight:600, letterSpacing:"0.05em", textTransform:"uppercase", background:isGM?"#7f4b2e":"#1a5c42", color:isGM?"#f5d6c0":"#a8ebd0", border:`1px solid ${isGM?"#a0603a":"#2d8a62"}`, pointerEvents:"none", zIndex:10, userSelect:"none" }}>
+      {isGM ? "⚔ Mestre" : "🎲 Jogador"}
+    </div>
+  );
+}
+
+function CameraControls({ camera, setCamera }) {
+  const reset   = () => setCamera({ x:0, y:0, scale:1 });
+  const zoomIn  = () => setCamera((c) => ({ ...c, scale:Math.min(ZOOM_MAX, c.scale*1.2) }));
+  const zoomOut = () => setCamera((c) => ({ ...c, scale:Math.max(ZOOM_MIN, c.scale/1.2) }));
+  const btnStyle = { width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(30,30,30,0.75)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:6, color:"#e0ddd8", cursor:"pointer", fontSize:16, userSelect:"none" };
+  return (
+    <div style={{ position:"absolute", bottom:16, left:16, display:"flex", flexDirection:"column", gap:4, zIndex:10 }}>
+      <button style={btnStyle} onClick={zoomIn} title="Zoom in">+</button>
+      <button style={{ ...btnStyle, fontSize:11 }} onClick={reset} title="Resetar câmera">⌂</button>
+      <button style={btnStyle} onClick={zoomOut} title="Zoom out">−</button>
+      <div style={{ background:"rgba(30,30,30,0.6)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:6, padding:"2px 6px", fontSize:10, color:"#9a9690", textAlign:"center", userSelect:"none" }}>
+        {Math.round(camera.scale*100)}%
+      </div>
+    </div>
+  );
+}
+
+function ReadOnlyOverlay({ visible }) {
+  if (!visible) return null;
+  return (
+    <div style={{ position:"absolute", bottom:56, left:"50%", transform:"translateX(-50%)", background:"rgba(180,60,30,0.85)", color:"#fff", padding:"6px 16px", borderRadius:8, fontSize:13, pointerEvents:"none", zIndex:20 }}>
+      Apenas o Mestre pode editar o tabuleiro
+    </div>
+  );
+}
+
+function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
+  const containerRef = useRef(null);
+  const [size, setSize] = useState({ width:800, height:600 });
+  const [showReadOnly, setShowReadOnly] = useState(false);
+  const [isPanMode, setIsPanMode] = useState(false);
+  const [activeTool, setActiveTool] = useState("select");
+  const [brushColor, setBrushColor] = useState(DRAW_COLORS[0].value);
+  const [brushSize,  setBrushSize]  = useState(BRUSH_SIZES[1]);
+  const [fogBrushCells, setFogBrushCells] = useState(FOG_BRUSH_CELLS[0]);
+
+  const permissions = useRole(role);
+  const { camera, setCamera, isPanning, cameraHandlers } = useCamera();
+  const { mapTransform, loadMap, updateMapTransform, clearMap } = useMapImage();
+  const { paths, startPath, extendPath, endPath, undoLast, clearAll } = useDrawing();
+  const { fogCells, paintFogCells, eraseFogCells, clearFog, fillFog } = useFog();
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setSize({ width, height });
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.code === "Space" && !e.repeat) { setIsPanMode(true); return; }
+      if (e.code === "KeyZ" && (e.ctrlKey || e.metaKey) && permissions.canDraw) { e.preventDefault(); undoLast(); return; }
+      if (permissions.canEdit) {
+        if (e.code === "KeyV") setActiveTool("select");
+        if (e.code === "KeyP") setActiveTool("draw");
+        if (e.code === "KeyF") setActiveTool("fog");
+      }
+    };
+    const onKeyUp = (e) => { if (e.code === "Space") setIsPanMode(false); };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); };
+  }, [permissions.canEdit, permissions.canDraw, undoLast]);
+
+  const handleGridClick = useCallback((e) => {
+    if (isPanMode || isPanning.current) return;
+    if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog")) return;
+    if (!permissions.canEdit) { setShowReadOnly(true); setTimeout(() => setShowReadOnly(false), 1900); }
+  }, [permissions.canEdit, activeTool, isPanMode, isPanning]);
+
+  const handleMouseDown = useCallback((e) => {
+    const isCapturingTool = permissions.canEdit && (activeTool === "draw" || activeTool === "fog") && e.button === 0 && !isPanMode;
+    if (isCapturingTool) return;
+    e.currentTarget.dataset.panMode = isPanMode ? "true" : "false";
+    cameraHandlers.onMouseDown(e);
+  }, [isPanMode, activeTool, permissions.canEdit, cameraHandlers]);
+
+  const cursor = useMemo(() => {
+    if (isPanMode) return isPanning.current ? "grabbing" : "grab";
+    if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog")) return "none";
+    return "default";
+  }, [isPanMode, isPanning, activeTool, permissions]);
+
+  const handleFillFog = useCallback(() => {
+    const cols = mapTransform ? Math.ceil(mapTransform.x + mapTransform.w + 5) : 40;
+    const rows = mapTransform ? Math.ceil(mapTransform.y + mapTransform.h + 5) : 30;
+    fillFog(Math.max(cols, 40), Math.max(rows, 30));
+  }, [fillFog, mapTransform]);
+
+  const worldTransform = `translate(${camera.x}, ${camera.y}) scale(${camera.scale})`;
+
+  return (
+    <div ref={containerRef} style={{ position:"relative", width:"100%", height:"100%", overflow:"hidden", cursor, outline:"none" }}
+      tabIndex={0} onClick={handleGridClick} onWheel={cameraHandlers.onWheel} onMouseDown={handleMouseDown}
+      onMouseMove={cameraHandlers.onMouseMove} onMouseUp={cameraHandlers.onMouseUp} onMouseLeave={cameraHandlers.onMouseLeave}>
+
+      <GridLines camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
+
+      <svg style={{ position:"absolute", top:0, left:0, width:size.width, height:size.height, overflow:"visible", pointerEvents:"none", zIndex:1 }}>
+        <g transform={worldTransform} style={{ pointerEvents:"auto" }} data-layer="world">
+          <MapImageLayer mapTransform={mapTransform} cellSize={cellSize} canEdit={permissions.canEdit} onUpdate={updateMapTransform} />
+        </g>
+      </svg>
+
+      <DrawingLayer paths={paths} camera={camera} width={size.width} height={size.height} />
+
+      {permissions.canDraw && activeTool === "draw" && !isPanMode && (
+        <DrawingCanvas camera={camera} width={size.width} height={size.height} brushColor={brushColor} brushSize={brushSize} onStart={startPath} onExtend={extendPath} onEnd={endPath} />
+      )}
+
+      <FogLayer fogCells={fogCells} camera={camera} cellSize={cellSize} width={size.width} height={size.height} isGM={permissions.isGM} />
+
+      {permissions.canFog && activeTool === "fog" && !isPanMode && (
+        <FogPaintCanvas camera={camera} cellSize={cellSize} width={size.width} height={size.height} fogBrushCells={fogBrushCells} onPaint={paintFogCells} onErase={eraseFogCells} />
+      )}
+
+      <RoleBadge role={role} />
+      <CameraControls camera={camera} setCamera={setCamera} />
+      <ReadOnlyOverlay visible={showReadOnly} />
+
+      {permissions.canEdit && (
+        <GMToolbox activeTool={activeTool} setActiveTool={setActiveTool}
+          brushColor={brushColor} setBrushColor={setBrushColor}
+          brushSize={brushSize} setBrushSize={setBrushSize}
+          fogBrushCells={fogBrushCells} setFogBrushCells={setFogBrushCells}
+          onMapUpload={loadMap} onMapClear={clearMap} hasMap={!!mapTransform}
+          onUndoDraw={undoLast} onClearDraw={clearAll}
+          onClearFog={clearFog} onFillFog={handleFillFog} />
+      )}
+
+      {isPanMode && (
+        <div style={{ position:"absolute", top:12, left:"50%", transform:"translateX(-50%)", background:"rgba(30,30,30,0.7)", color:"#ccc", padding:"4px 12px", borderRadius:6, fontSize:12, pointerEvents:"none", zIndex:30 }}>
+          Modo Pan — arraste para mover
+        </div>
+      )}
+
+      {permissions.canFog && activeTool === "fog" && !isPanMode && (
+        <div style={{ position:"absolute", top:12, left:"50%", transform:"translateX(-50%)", background:"rgba(60,10,90,0.82)", color:"#d8b4fe", padding:"4px 14px", borderRadius:6, fontSize:12, pointerEvents:"none", zIndex:30, border:"1px solid rgba(160,80,255,0.4)" }}>
+          🌫 Névoa — Esq: pintar · Dir: apagar · Espaço: pan
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Detecta o papel baseado no estado da sessão (isMaster definido no JS principal) ──
+function VTTApp() {
+  const [role, setRole] = useState("PLAYER");
+
+  useEffect(() => {
+    // Sincroniza com o estado do grimório após montagem
+    const check = () => {
+      if (typeof window.isMaster !== "undefined") {
+        setRole(window.isMaster ? "GM" : "PLAYER");
+      }
+    };
+    check();
+    const interval = setInterval(check, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return <VTTGrid role={role} cellSize={40} />;
+}
+
+// Monta o VTTGrid quando a aba Mapa for aberta pela primeira vez
+let vttMounted = false;
+function mountVTT() {
+  if (vttMounted) return;
+  const root = document.getElementById("vtt-root");
+  if (!root) return;
+  vttMounted = true;
+  ReactDOM.createRoot(root).render(<VTTApp />);
+}
+
+// Intercepta o showTab original para montar o VTT quando a aba mapa for selecionada
+const _origShowTab = window.showTab;
+window.showTab = function(tab, btn) {
+  if (_origShowTab) _origShowTab(tab, btn);
+  if (tab === "mapa") {
+    setTimeout(mountVTT, 50);
+  }
+};
+})();
 </script>
 </body>
 </html>
