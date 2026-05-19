@@ -2756,85 +2756,106 @@ function RulerLayer({ camera, cellSize, width, height }) {
   useEffect(() => {
     const cvH = refH.current; if(!cvH) return;
     const ctx = cvH.getContext("2d");
-    ctx.clearRect(0,0,width,rulerSize);
-    ctx.fillStyle = "#e8e8e8";
-    ctx.fillRect(0,0,width,rulerSize);
-    ctx.strokeStyle = "#999";
-    ctx.lineWidth = 1;
-    ctx.moveTo(0,rulerSize-1);
-    ctx.lineTo(width,rulerSize-1);
-    ctx.stroke();
     
-    const sc = cellSize * camera.scale;
-    const ox = ((camera.x%sc)+sc)%sc;
-    const startCell = Math.floor(-camera.x / sc);
+    if(!ctx || width <= 0 || rulerSize <= 0) return;
     
-    ctx.fillStyle = "#333";
-    ctx.font = "10px monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    
-    for(let x=ox;x<=width;x+=sc){
-      const cell = startCell + Math.round((x - ox)/sc);
-      ctx.beginPath();
+    try {
+      ctx.clearRect(0,0,width,rulerSize);
+      ctx.fillStyle = "#e8e8e8";
+      ctx.fillRect(0,0,width,rulerSize);
       ctx.strokeStyle = "#999";
-      ctx.lineWidth = 0.5;
-      
-      if(cell % 5 === 0){
-        ctx.moveTo(x, rulerSize - 10);
-        ctx.lineTo(x, rulerSize);
-        ctx.fillText(cell.toString(), x, 6);
-      } else {
-        ctx.moveTo(x, rulerSize - 5);
-        ctx.lineTo(x, rulerSize);
-      }
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0,rulerSize-1);
+      ctx.lineTo(width,rulerSize-1);
       ctx.stroke();
+      
+      const sc = cellSize * camera.scale;
+      if(sc < 8) return; // Skip if too small
+      
+      const ox = ((camera.x%sc)+sc)%sc;
+      const startCell = Math.floor(-camera.x / sc);
+      
+      ctx.fillStyle = "#333";
+      ctx.font = "10px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      
+      for(let x=ox;x<=width;x+=sc){
+        const cell = startCell + Math.round((x - ox)/sc);
+        ctx.beginPath();
+        ctx.strokeStyle = "#999";
+        ctx.lineWidth = 0.5;
+        
+        if(cell % 5 === 0){
+          ctx.moveTo(x, rulerSize - 10);
+          ctx.lineTo(x, rulerSize);
+          ctx.fillText(cell.toString(), x, 6);
+        } else {
+          ctx.moveTo(x, rulerSize - 5);
+          ctx.lineTo(x, rulerSize);
+        }
+        ctx.stroke();
+      }
+    } catch(e) {
+      console.warn("RulerLayer horizontal error:", e);
     }
   }, [camera, cellSize, width]);
   
   useEffect(() => {
     const cvV = refV.current; if(!cvV) return;
     const ctx = cvV.getContext("2d");
-    ctx.clearRect(0,0,rulerSize,height);
-    ctx.fillStyle = "#e8e8e8";
-    ctx.fillRect(0,0,rulerSize,height);
-    ctx.strokeStyle = "#999";
-    ctx.lineWidth = 1;
-    ctx.moveTo(rulerSize-1,0);
-    ctx.lineTo(rulerSize-1,height);
-    ctx.stroke();
     
-    const sc = cellSize * camera.scale;
-    const oy = ((camera.y%sc)+sc)%sc;
-    const startCell = Math.floor(-camera.y / sc);
+    if(!ctx || rulerSize <= 0 || height <= 0) return;
     
-    ctx.fillStyle = "#333";
-    ctx.font = "10px monospace";
-    ctx.textAlign = "right";
-    ctx.textBaseline = "middle";
-    
-    for(let y=oy;y<=height;y+=sc){
-      const cell = startCell + Math.round((y - oy)/sc);
-      ctx.beginPath();
+    try {
+      const adjustedHeight = Math.max(0, height - rulerSize);
+      ctx.clearRect(0,0,rulerSize,adjustedHeight);
+      ctx.fillStyle = "#e8e8e8";
+      ctx.fillRect(0,0,rulerSize,adjustedHeight);
       ctx.strokeStyle = "#999";
-      ctx.lineWidth = 0.5;
-      
-      if(cell % 5 === 0){
-        ctx.moveTo(rulerSize - 10, y);
-        ctx.lineTo(rulerSize, y);
-        ctx.fillText(cell.toString(), rulerSize - 5, y);
-      } else {
-        ctx.moveTo(rulerSize - 5, y);
-        ctx.lineTo(rulerSize, y);
-      }
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(rulerSize-1,0);
+      ctx.lineTo(rulerSize-1,adjustedHeight);
       ctx.stroke();
+      
+      const sc = cellSize * camera.scale;
+      if(sc < 8) return; // Skip if too small
+      
+      const oy = ((camera.y%sc)+sc)%sc;
+      const startCell = Math.floor(-camera.y / sc);
+      
+      ctx.fillStyle = "#333";
+      ctx.font = "10px monospace";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      
+      for(let y=oy;y<=adjustedHeight;y+=sc){
+        const cell = startCell + Math.round((y - oy)/sc);
+        ctx.beginPath();
+        ctx.strokeStyle = "#999";
+        ctx.lineWidth = 0.5;
+        
+        if(cell % 5 === 0){
+          ctx.moveTo(rulerSize - 10, y);
+          ctx.lineTo(rulerSize, y);
+          ctx.fillText(cell.toString(), rulerSize - 5, y);
+        } else {
+          ctx.moveTo(rulerSize - 5, y);
+          ctx.lineTo(rulerSize, y);
+        }
+        ctx.stroke();
+      }
+    } catch(e) {
+      console.warn("RulerLayer vertical error:", e);
     }
   }, [camera, cellSize, height]);
   
   return (
     <>
-      <canvas ref={refH} width={width} height={rulerSize} style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:12 }} />
-      <canvas ref={refV} width={rulerSize} height={height} style={{ position:"absolute",top:rulerSize,left:0,pointerEvents:"none",zIndex:12 }} />
+      <canvas ref={refH} width={Math.max(0, width)} height={rulerSize} style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:12 }} />
+      <canvas ref={refV} width={rulerSize} height={Math.max(0, height - rulerSize)} style={{ position:"absolute",top:rulerSize,left:0,pointerEvents:"none",zIndex:12 }} />
     </>
   );
 }
@@ -3383,14 +3404,13 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
       onMouseUp={stopPan}
       onMouseLeave={stopPan}
     >
-      {/* Réguas */}
-      <div style={{ position:"absolute",top:0,left:0,right:0,bottom:0,pointerEvents:"none",zIndex:15 }}>
+      <GridLines camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
+
+      <div style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:15 }}>
         <RulerLayer camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
       </div>
 
-      <GridLines camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
-
-      <svg style={{ position:"absolute",top:0,left:0,width:size.width,height:size.height,overflow:"visible",pointerEvents: (activeTool === "draw" || activeTool === "fog") ? "none" : "none",zIndex:1 }}>
+      <svg style={{ position:"absolute",top:0,left:0,width:size.width,height:size.height,overflow:"visible",pointerEvents: (activeTool === "select") ? "auto" : "none",zIndex:1 }}>
         <g transform={wt} style={{ pointerEvents: (activeTool === "select") ? "auto" : "none" }} data-layer="world">
           <MapImageLayer mapTransform={mapTransform} cellSize={cellSize} cameraScale={camera.scale} canEdit={permissions.canEdit} onUpdate={updateMapTransform} />
         </g>
