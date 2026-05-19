@@ -2579,8 +2579,8 @@ const CELL_SIZE_DEFAULT = 40;
 const ZOOM_MIN  = 0.25;
 const ZOOM_MAX  = 4;
 const ZOOM_STEP = 0.001;
-const GRID_COLOR_DARK = "#2e2e2e";
-const BG_COLOR_DARK   = "#1a1a1a";
+const GRID_COLOR_DARK = "#c8c8c8";
+const BG_COLOR_DARK   = "#f0f0f0";
 
 const DRAW_COLORS = [
   { label:"Branco",   value:"#ffffff" }, { label:"Vermelho", value:"#e05252" },
@@ -2715,7 +2715,7 @@ function GridLines({ camera, cellSize, width, height }) {
     const oy = ((camera.y%sc)+sc)%sc;
     ctx.beginPath();
     ctx.strokeStyle = GRID_COLOR_DARK;
-    ctx.lineWidth   = camera.scale>1.5 ? 1 : 0.5;
+    ctx.lineWidth   = 0.5;
     for(let x=ox;x<=width;x+=sc){ ctx.moveTo(x,0); ctx.lineTo(x,height); }
     for(let y=oy;y<=height;y+=sc){ ctx.moveTo(0,y); ctx.lineTo(width,y); }
     ctx.stroke();
@@ -2853,12 +2853,184 @@ function FogPaintCanvas({ camera, cellSize, width, height, fogBrushCells, onPain
   );
 }
 
+// ── useTokens ──
+function useTokens() {
+  const [tokens, setTokens] = useState([]);
+  const addToken = useCallback((token) => {
+    setTokens((p) => [...p, { id:`tok-${Date.now()}`, x:0, y:0, hidden:false, label:"", ...token }]);
+  }, []);
+  const updateToken = useCallback((id, upd) => {
+    setTokens((p) => p.map((t) => t.id===id ? {...t,...upd} : t));
+  }, []);
+  const removeToken = useCallback((id) => {
+    setTokens((p) => p.filter((t) => t.id!==id));
+  }, []);
+  return { tokens, addToken, updateToken, removeToken };
+}
+
+// ── TokenLayer ──
+function TokenLayer({ tokens, camera, cellSize, isGM, onUpdate, onRemove, activeTool }) {
+  const dragging = useRef(null);
+  const [selected, setSelected] = useState(null);
+
+  const toWorld = (e, rect) => ({
+    x: (e.clientX - rect.left - camera.x) / camera.scale,
+    y: (e.clientY - rect.top  - camera.y) / camera.scale,
+  });
+
+  const snapToGrid = (wx, wy) => ({
+    x: Math.round(wx / cellSize),
+    y: Math.round(wy / cellSize),
+  });
+
+  const onTokenDown = (e, tok) => {
+    if (!isGM || activeTool !== "select") return;
+    e.stopPropagation();
+    setSelected(tok.id);
+    const rect = e.currentTarget.closest('[data-vtt-container]')?.getBoundingClientRect()
+      || e.currentTarget.getBoundingClientRect();
+    dragging.current = {
+      id: tok.id,
+      startMx: e.clientX, startMy: e.clientY,
+      startTx: tok.x,     startTy: tok.y,
+      rect,
+    };
+    const mv = (ev) => {
+      if (!dragging.current) return;
+      const d = dragging.current;
+      const dx = (ev.clientX - d.startMx) / camera.scale / cellSize;
+      const dy = (ev.clientY - d.startMy) / camera.scale / cellSize;
+      onUpdate(d.id, { x: d.startTx + dx, y: d.startTy + dy });
+    };
+    const up = (ev) => {
+      if (!dragging.current) return;
+      const d = dragging.current;
+      const dx = (ev.clientX - d.startMx) / camera.scale / cellSize;
+      const dy = (ev.clientY - d.startMy) / camera.scale / cellSize;
+      const snapped = snapToGrid((d.startTx + dx) * cellSize, (d.startTy + dy) * cellSize);
+      onUpdate(d.id, { x: snapped.x, y: snapped.y });
+      dragging.current = null;
+      window.removeEventListener('mousemove', mv);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', mv);
+    window.addEventListener('mouseup', up);
+  };
+
+  const px = (v) => v * cellSize * camera.scale + camera.x;
+  const py = (v) => v * cellSize * camera.scale + camera.y;
+  const sz = cellSize * camera.scale;
+
+  return (
+    <div style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", pointerEvents:"none", zIndex:6 }}>
+      {tokens.map((tok) => {
+        if (!isGM && tok.hidden) return null;
+        const opacity = tok.hidden ? 0.4 : 1;
+        const left = px(tok.x) - sz/2;
+        const top  = py(tok.y) - sz/2;
+        const isSel = selected === tok.id;
+        return (
+          <div key={tok.id} style={{ position:"absolute", left, top, width:sz, height:sz, opacity, pointerEvents: isGM && activeTool==="select" ? "auto" : "none", cursor: isGM ? "grab" : "default", userSelect:"none" }}
+            onMouseDown={(e) => onTokenDown(e, tok)}>
+            {/* Anel de seleção */}
+            {isSel && isGM && (
+              <div style={{ position:"absolute", inset:-3, borderRadius:"50%", border:"2px solid rgba(80,180,255,0.9)", pointerEvents:"none", zIndex:2 }} />
+            )}
+            {/* Imagem ou círculo */}
+            {tok.src ? (
+              <img src={tok.src} alt={tok.label||"token"} style={{ width:"100%", height:"100%", borderRadius:"50%", objectFit:"cover", border:"2px solid rgba(255,255,255,0.5)", display:"block" }} draggable={false} />
+            ) : (
+              <div style={{ width:"100%", height:"100%", borderRadius:"50%", background: tok.color||"#5278e0", border:"2px solid rgba(255,255,255,0.5)", display:"flex", alignItems:"center", justifyContent:"center", fontSize: Math.max(10, sz*0.35), color:"#fff", fontWeight:700 }}>
+                {(tok.label||"?")[0].toUpperCase()}
+              </div>
+            )}
+            {/* Label */}
+            {tok.label && (
+              <div style={{ position:"absolute", bottom: -sz*0.22, left:"50%", transform:"translateX(-50%)", background:"rgba(0,0,0,0.65)", color:"#fff", fontSize: Math.max(9, sz*0.2), padding:"1px 5px", borderRadius:3, whiteSpace:"nowrap", pointerEvents:"none", zIndex:3 }}>
+                {tok.label}
+              </div>
+            )}
+            {/* Botões GM (visíveis apenas quando selecionado) */}
+            {isSel && isGM && (
+              <div style={{ position:"absolute", top: -sz*0.35, right: -sz*0.15, display:"flex", gap:3, zIndex:4 }}>
+                <button title={tok.hidden?"Mostrar ao Jogador":"Esconder do Jogador"} onClick={(e)=>{ e.stopPropagation(); onUpdate(tok.id,{hidden:!tok.hidden}); }}
+                  style={{ width:20, height:20, borderRadius:4, border:"none", background:tok.hidden?"rgba(220,60,40,0.85)":"rgba(40,120,220,0.85)", color:"#fff", fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>
+                  {tok.hidden?"👁":"🙈"}
+                </button>
+                <button title="Remover token" onClick={(e)=>{ e.stopPropagation(); onRemove(tok.id); setSelected(null); }}
+                  style={{ width:20, height:20, borderRadius:4, border:"none", background:"rgba(180,40,20,0.85)", color:"#fff", fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── AddTokenModal ──
+function AddTokenModal({ onAdd, onClose }) {
+  const [label, setLabel] = useState("");
+  const [color, setColor] = useState("#5278e0");
+  const [src, setSrc]     = useState(null);
+  const fileRef = useRef(null);
+  const TOKEN_COLORS = ["#5278e0","#e05252","#52c47a","#e09a3a","#9a52e0","#e052b4","#4ac4c4","#d4c84a"];
+  const handleFile = (e) => {
+    const f = e.target.files[0];
+    if (!f || !f.type.startsWith("image/")) return;
+    const url = URL.createObjectURL(f);
+    setSrc(url);
+  };
+  const handleAdd = () => {
+    onAdd({ label: label.trim()||"Token", color, src });
+    onClose();
+  };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={(e)=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div style={{ background:"#1e1e1e", border:"1px solid rgba(255,255,255,0.15)", borderRadius:10, padding:"20px 22px", width:280, display:"flex", flexDirection:"column", gap:12 }}>
+        <div style={{ fontSize:14, fontWeight:700, color:"#e0ddd8", letterSpacing:"0.05em" }}>Adicionar Token</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+          <label style={{ fontSize:11, color:"rgba(180,170,160,0.7)", textTransform:"uppercase", letterSpacing:"0.08em" }}>Nome / Label</label>
+          <input value={label} onChange={(e)=>setLabel(e.target.value)} placeholder="ex: Goblin, Herói..." maxLength={20}
+            style={{ background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:5, padding:"5px 8px", color:"#e0ddd8", fontSize:13, outline:"none" }} />
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+          <label style={{ fontSize:11, color:"rgba(180,170,160,0.7)", textTransform:"uppercase", letterSpacing:"0.08em" }}>Imagem (opcional)</label>
+          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+            <button onClick={()=>fileRef.current?.click()} style={{ padding:"5px 10px", borderRadius:5, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>📂 Escolher imagem</button>
+            {src && <span style={{ fontSize:11, color:"rgba(80,200,120,0.9)" }}>✓ Carregada</span>}
+            <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={handleFile} />
+          </div>
+          {src && <img src={src} alt="preview" style={{ width:56, height:56, borderRadius:"50%", objectFit:"cover", border:"2px solid rgba(255,255,255,0.3)", alignSelf:"center" }} />}
+        </div>
+        {!src && (
+          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+            <label style={{ fontSize:11, color:"rgba(180,170,160,0.7)", textTransform:"uppercase", letterSpacing:"0.08em" }}>Cor do círculo</label>
+            <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+              {TOKEN_COLORS.map((c)=>(
+                <button key={c} onClick={()=>setColor(c)} style={{ width:24, height:24, borderRadius:"50%", background:c, border:color===c?"3px solid #fff":"2px solid rgba(255,255,255,0.2)", cursor:"pointer", padding:0 }} />
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:4 }}>
+          <button onClick={onClose} style={{ padding:"6px 14px", borderRadius:5, border:"1px solid rgba(255,255,255,0.15)", background:"transparent", color:"#9a9690", cursor:"pointer", fontSize:12 }}>Cancelar</button>
+          <button onClick={handleAdd} style={{ padding:"6px 14px", borderRadius:5, border:"none", background:"rgba(40,120,220,0.85)", color:"#fff", cursor:"pointer", fontSize:12, fontWeight:600 }}>Adicionar ✦</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Styles ──
 const secS = { background:"rgba(20,20,20,0.88)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"6px 8px", display:"flex", flexDirection:"column", gap:5, backdropFilter:"blur(6px)" };
 const lblS = { fontSize:10, color:"rgba(180,170,160,0.7)", textTransform:"uppercase", letterSpacing:"0.08em", userSelect:"none" };
 
 // ── GMToolbox ──
-function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog }) {
+function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken }) {
   const fileRef = useRef(null);
   const tbtn = (id) => ({
     onClick:()=>setActiveTool(id),
@@ -2950,6 +3122,13 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
           </div>
         </div>
       </>}
+      {/* Tokens */}
+      <div style={secS}>
+        <span style={lblS}>Tokens</span>
+        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+          <button onClick={onAddToken} style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>🎭 Adicionar Token</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3018,6 +3197,8 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
   const { mapTransform, loadMap, updateMapTransform, clearMap } = useMapImage();
   const { paths, startPath, extendPath, endPath, undoLast, clearAll } = useDrawing();
   const { fogCells, paintFogCells, eraseFogCells, clearFog, fillFog } = useFog();
+  const { tokens, addToken, updateToken, removeToken } = useTokens();
+  const [showTokenModal, setShowTokenModal] = useState(false);
 
   useKeyboard(isPanMode, setIsPanModeSync, permissions, setActiveTool, undoLast);
 
@@ -3077,6 +3258,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
 
   return (
     <div ref={containerRef}
+      data-vtt-container="true"
       style={{ position:"relative",width:"100%",height:"100%",overflow:"hidden",cursor:cursorStyle,outline:"none",background:BG_COLOR_DARK }}
       tabIndex={0}
       onClick={handleClick}
@@ -3103,6 +3285,8 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
 
       <FogLayer fogCells={fogCells} camera={camera} cellSize={cellSize} width={size.width} height={size.height} isGM={permissions.isGM} />
 
+      <TokenLayer tokens={tokens} camera={camera} cellSize={cellSize} isGM={permissions.isGM} onUpdate={updateToken} onRemove={removeToken} activeTool={activeTool} />
+
       {permissions.canFog && activeTool==="fog" && !isPanMode && (
         <FogPaintCanvas camera={camera} cellSize={cellSize} width={size.width} height={size.height}
           fogBrushCells={fogBrushCells} onPaint={paintFogCells} onErase={eraseFogCells} />
@@ -3119,7 +3303,12 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
           fogBrushCells={fogBrushCells} setFogBrushCells={setFogBrushCells}
           onMapUpload={loadMap}         onMapClear={clearMap}         hasMap={!!mapTransform}
           onUndoDraw={undoLast}         onClearDraw={clearAll}
-          onClearFog={clearFog}         onFillFog={handleFillFog} />
+          onClearFog={clearFog}         onFillFog={handleFillFog}
+          onAddToken={()=>setShowTokenModal(true)} />
+      )}
+
+      {showTokenModal && permissions.canEdit && (
+        <AddTokenModal onAdd={addToken} onClose={()=>setShowTokenModal(false)} />
       )}
 
       {/* Indicador de pan */}
@@ -3144,7 +3333,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
       )}
 
       {/* Legenda atalhos (canto inferior direito) */}
-      <div style={{ position:"absolute",bottom:16,right:16,fontSize:10,color:"rgba(255,255,255,0.2)",lineHeight:1.7,textAlign:"right",pointerEvents:"none",zIndex:10,userSelect:"none" }}>
+      <div style={{ position:"absolute",bottom:16,right:16,fontSize:10,color:"rgba(0,0,0,0.25)",lineHeight:1.7,textAlign:"right",pointerEvents:"none",zIndex:10,userSelect:"none" }}>
         {permissions.canEdit && <><div>V · Mover &nbsp; P · Caneta &nbsp; F · Névoa</div><div>Espaço · Pan &nbsp; Ctrl+Z · Desfazer</div></>}
         <div>Scroll · Zoom &nbsp; Botão do meio · Pan</div>
       </div>
