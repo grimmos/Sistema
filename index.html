@@ -1925,7 +1925,7 @@ function finalizeRoll(id, preCalcRes){
   const pn=pen(p.totalStrikes||0);
   const mod=sk.modifier||0;                          // modificador da perícia (pode ser negativo)
   const rawAdj=best-pn;                              // melhor dado menos penalidade de strikes
-  const finalResult=rawAdj+mod;                      // sem piso mínimo — pode ser negativo
+  const finalResult=rawAdj+mod;                      // sem mínimo — strikes podem levar a valores negativos
   const hasAnyMod=(pn>0||mod!==0);
   const sr=$('sr-'+id); sk.rolling=false; $('rb-'+id).disabled=false;
 
@@ -1938,24 +1938,16 @@ function finalizeRoll(id, preCalcRes){
   }
 
   if(id==='fazer-algo'&&sixes>=1){
-    const sixesNeeded=sk.level; // para ir de Nv N para Nv N+1 precisa de N sixes
-    if(sixes>=sixesNeeded&&sk.level<5){
-      sk.level=Math.min(5,sk.level+1);
-      $('mup-name').textContent='Fazer Algo';
-      $('mup-txt').textContent='Fazer Algo avança para '+LVL_LBL[sk.level]+'! Você rola '+sk.level+'d6.';
-      $('modal-up').classList.remove('hidden');
-    } else if(sixes===1&&sk.level===1){
-      sr.className='skill-result r-crit';
-      sr.textContent='✦ Crítico! Nova perícia desbloqueada!';
-      $('modal-new-inp').value='';
-      $('modal-new').classList.remove('hidden');
-      setTimeout(()=>$('modal-new-inp').focus(),100);
-    }
+    // Fazer Algo permanece sempre Nível I — qualquer 6 abre nova perícia
+    sr.className='skill-result r-crit';
+    sr.textContent='✦ Crítico! Nova perícia desbloqueada!';
+    $('modal-new-inp').value='';
+    $('modal-new').classList.remove('hidden');
+    setTimeout(()=>$('modal-new-inp').focus(),100);
     sk.lastRollResults=res; sk.lastResult=sr.textContent; sk.lastResultClass=sr.className;
     schSave(); return;
   }
-  const sixesNeeded=sk.level; // para ir de Nv N para Nv N+1 precisa de N sixes
-  if(sixes>=sixesNeeded&&sk.level<5){
+  if(sixes>=sk.level&&sk.level<5){
     sk.level=Math.min(5,sk.level+1);
     sr.className='skill-result r-crit'; sr.textContent='✦✦ '+sk.name+' → '+LVL_LBL[sk.level];
     $('mup-name').textContent=sk.name;
