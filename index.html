@@ -561,9 +561,18 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 /* ══ ABA: MAPA VTT ══ */
 #tab-mapa {
   padding: 0 !important;
-  height: calc(100vh - 110px);
-  min-height: 500px;
+  /* Sai do fluxo do .wrap — ocupa toda a viewport abaixo do nav */
+  position: fixed;
+  top: var(--vtt-top, 110px);   /* ajustado via JS após mount */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
   overflow: hidden;
+  display: none;           /* mantém o padrão de .chapter */
+}
+#tab-mapa.active {
+  display: block !important;
 }
 #vtt-root {
   width: 100%;
@@ -2590,7 +2599,7 @@ function useRole(role) {
 }
 
 // ── Camera: wheel nativo (passive:false) para zoom funcionar no Chrome ──
-function useCamera(containerRef) {
+function useCamera(containerRef, isPanModeRef, setCursorStyle) {
   const [camera, setCamera] = useState({ x:0, y:0, scale:1 });
   const isPanning  = useRef(false);
   const lastMouse  = useRef({ x:0, y:0 });
@@ -2615,13 +2624,14 @@ function useCamera(containerRef) {
   }, [containerRef]);
 
   const onMouseDown = useCallback((e) => {
-    if (e.button === 1 || e.currentTarget.dataset.panMode === "true") {
+    if (e.button === 1 || isPanModeRef.current) {
       e.preventDefault();
       isPanning.current = true;
       lastMouse.current = { x:e.clientX, y:e.clientY };
-      e.currentTarget.style.cursor = "grabbing";
+      setCursorStyle("grabbing");
     }
-  }, []);
+  }, [isPanModeRef, setCursorStyle]);
+
   const onMouseMove = useCallback((e) => {
     if (!isPanning.current) return;
     const dx = e.clientX - lastMouse.current.x;
@@ -2629,10 +2639,10 @@ function useCamera(containerRef) {
     lastMouse.current = { x:e.clientX, y:e.clientY };
     setCamera((cam) => ({ ...cam, x:cam.x+dx, y:cam.y+dy }));
   }, []);
+
   const stopPan = useCallback((e) => {
     if (isPanning.current) {
       isPanning.current = false;
-      if (e && e.currentTarget) e.currentTarget.style.cursor = "";
     }
   }, []);
 
@@ -2714,7 +2724,7 @@ function GridLines({ camera, cellSize, width, height }) {
 }
 
 // ── MapImageLayer ──
-function MapImageLayer({ mapTransform, cellSize, canEdit, onUpdate }) {
+function MapImageLayer({ mapTransform, cellSize, cameraScale, canEdit, onUpdate }) {
   const dragging = useRef(false);
   const resizing = useRef(null);
   const ds       = useRef({});
@@ -2722,17 +2732,12 @@ function MapImageLayer({ mapTransform, cellSize, canEdit, onUpdate }) {
   const px=mapTransform.x*cellSize, py=mapTransform.y*cellSize;
   const pw=mapTransform.w*cellSize, ph=mapTransform.h*cellSize;
 
-  const getScale = (el) => {
-    const t = el.closest("[data-layer=world]")?.style.transform||"";
-    return parseFloat(t.match(/scale\(([^)]+)\)/)?.[1]??1);
-  };
-
   const onImgDown = (e) => {
     if(!canEdit||resizing.current) return;
     e.stopPropagation();
     dragging.current=true;
     ds.current={ mx:e.clientX, my:e.clientY, tx:mapTransform.x, ty:mapTransform.y };
-    const sc = getScale(e.currentTarget);
+    const sc = cameraScale;
     const mv=(ev)=>{ if(!dragging.current)return; onUpdate({ x:ds.current.tx+(ev.clientX-ds.current.mx)/sc/cellSize, y:ds.current.ty+(ev.clientY-ds.current.my)/sc/cellSize }); };
     const up=()=>{ dragging.current=false; window.removeEventListener("mousemove",mv); window.removeEventListener("mouseup",up); };
     window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
@@ -2741,7 +2746,7 @@ function MapImageLayer({ mapTransform, cellSize, canEdit, onUpdate }) {
   const onHandleDown = (h) => (e) => {
     if(!canEdit) return; e.stopPropagation(); resizing.current=h;
     ds.current={ mx:e.clientX, my:e.clientY, tx:mapTransform.x, ty:mapTransform.y, tw:mapTransform.w, th:mapTransform.h };
-    const sc=getScale(e.currentTarget);
+    const sc=cameraScale;
     const mv=(ev)=>{
       const dx=(ev.clientX-ds.current.mx)/sc/cellSize, dy=(ev.clientY-ds.current.my)/sc/cellSize, d=ds.current;
       let {tx,ty,tw,th}=d;
@@ -2972,6 +2977,9 @@ function CameraControls({ camera, setCamera }) {
 function useKeyboard(isPanMode, setIsPanMode, permissions, setActiveTool, undoLast) {
   useEffect(() => {
     const kd=(e)=>{
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable) return;
+
       if(e.code==="Space"&&!e.repeat){ setIsPanMode(true); return; }
       if(e.code==="KeyZ"&&(e.ctrlKey||e.metaKey)&&permissions.canDraw){ e.preventDefault(); undoLast(); return; }
       if(permissions.canEdit){
@@ -2993,25 +3001,33 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
   const [size, setSize]         = useState({ width:800, height:600 });
   const [showRO, setShowRO]     = useState(false);
   const [isPanMode, setIsPanMode] = useState(false);
+  const isPanModeRef = useRef(false);
+  const setIsPanModeSync = useCallback((v) => {
+    isPanModeRef.current = v;
+    setIsPanMode(v);
+  }, []);
+
   const [activeTool, setActiveTool] = useState("select");
   const [brushColor, setBrushColor] = useState(DRAW_COLORS[0].value);
   const [brushSize,  setBrushSize]  = useState(BRUSH_SIZES[1]);
   const [fogBrushCells, setFogBrushCells] = useState(FOG_BRUSH_CELLS[0]);
+  const [cursorStyle, setCursorStyle] = useState("default");
 
   const permissions = useRole(role);
-  const { camera, setCamera, isPanning, cameraHandlers } = useCamera(containerRef);
+  const { camera, setCamera, isPanning, cameraHandlers } = useCamera(containerRef, isPanModeRef, setCursorStyle);
   const { mapTransform, loadMap, updateMapTransform, clearMap } = useMapImage();
   const { paths, startPath, extendPath, endPath, undoLast, clearAll } = useDrawing();
   const { fogCells, paintFogCells, eraseFogCells, clearFog, fillFog } = useFog();
 
-  useKeyboard(isPanMode, setIsPanMode, permissions, setActiveTool, undoLast);
+  useKeyboard(isPanMode, setIsPanModeSync, permissions, setActiveTool, undoLast);
 
   // ResizeObserver para dimensionar o canvas ao container real
   useEffect(() => {
     const el = containerRef.current; if(!el) return;
+    setSize({ width: el.offsetWidth, height: el.offsetHeight });
     const obs = new ResizeObserver(([e]) => {
       const { width, height } = e.contentRect;
-      setSize({ width, height });
+      if (width > 0 && height > 0) setSize({ width, height });
     });
     obs.observe(el);
     return ()=>obs.disconnect();
@@ -3020,8 +3036,18 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
   const handleMouseDown = useCallback((e) => {
     const capturing = permissions.canEdit && (activeTool==="draw"||activeTool==="fog") && e.button===0 && !isPanMode;
     if(capturing) return;
-    e.currentTarget.dataset.panMode = isPanMode ? "true" : "false";
     cameraHandlers.onMouseDown(e);
+  }, [isPanMode, activeTool, permissions.canEdit, cameraHandlers]);
+
+  const stopPan = useCallback((e) => {
+    cameraHandlers.onMouseUp(e);
+    if (isPanMode) {
+      setCursorStyle("grab");
+    } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog")) {
+      setCursorStyle("none");
+    } else {
+      setCursorStyle("default");
+    }
   }, [isPanMode, activeTool, permissions.canEdit, cameraHandlers]);
 
   const handleClick = useCallback((e) => {
@@ -3036,26 +3062,34 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
     fillFog(Math.max(cols,40), Math.max(rows,30));
   }, [fillFog, mapTransform]);
 
-  const cursor = isPanMode ? (isPanning.current?"grabbing":"grab")
-    : (permissions.canEdit&&(activeTool==="draw"||activeTool==="fog") ? "none" : "default");
+  useEffect(() => {
+    if (isPanning.current) return;
+    if (isPanMode) {
+      setCursorStyle("grab");
+    } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog")) {
+      setCursorStyle("none");
+    } else {
+      setCursorStyle("default");
+    }
+  }, [isPanMode, activeTool, permissions.canEdit]);
 
   const wt = `translate(${camera.x},${camera.y}) scale(${camera.scale})`;
 
   return (
     <div ref={containerRef}
-      style={{ position:"relative",width:"100%",height:"100%",overflow:"hidden",cursor,outline:"none",background:BG_COLOR_DARK }}
+      style={{ position:"relative",width:"100%",height:"100%",overflow:"hidden",cursor:cursorStyle,outline:"none",background:BG_COLOR_DARK }}
       tabIndex={0}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
       onMouseMove={cameraHandlers.onMouseMove}
-      onMouseUp={cameraHandlers.onMouseUp}
-      onMouseLeave={cameraHandlers.onMouseLeave}
+      onMouseUp={stopPan}
+      onMouseLeave={stopPan}
     >
       <GridLines camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
 
-      <svg style={{ position:"absolute",top:0,left:0,width:size.width,height:size.height,overflow:"visible",pointerEvents:"none",zIndex:1 }}>
-        <g transform={wt} style={{ pointerEvents:"auto" }} data-layer="world">
-          <MapImageLayer mapTransform={mapTransform} cellSize={cellSize} canEdit={permissions.canEdit} onUpdate={updateMapTransform} />
+      <svg style={{ position:"absolute",top:0,left:0,width:size.width,height:size.height,overflow:"visible",pointerEvents: (activeTool === "draw" || activeTool === "fog") ? "none" : "none",zIndex:1 }}>
+        <g transform={wt} style={{ pointerEvents: (activeTool === "select") ? "auto" : "none" }} data-layer="world">
+          <MapImageLayer mapTransform={mapTransform} cellSize={cellSize} cameraScale={camera.scale} canEdit={permissions.canEdit} onUpdate={updateMapTransform} />
         </g>
       </svg>
 
@@ -3129,6 +3163,14 @@ function VTTApp() {
     }, 1500);
     return ()=>clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    const nav = document.getElementById('main-nav');
+    const bar = document.getElementById('player-bar');
+    const top = (nav?.offsetHeight || 0) + (bar?.offsetHeight || 0);
+    document.documentElement.style.setProperty('--vtt-top', top + 'px');
+  }, []);
+
   return <VTTGrid role={role} cellSize={40} />;
 }
 
@@ -3140,6 +3182,7 @@ window._mountVTT = function() {
   if(!root) return;
   _mounted = true;
   ReactDOM.createRoot(root).render(<VTTApp />);
+  setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
 };
 
 })();
