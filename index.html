@@ -1456,10 +1456,18 @@ async function iniciarSessao(nome, code, criando){
         const snap = await db.ref(`salas/${code}/jogadores`).once('value');
         if(snap.exists()){
           const data = snap.val() || {};
-          Object.entries(data).forEach(([pid,pd])=>{ if(pid !== myId) players[pid]=pd; });
+          Object.entries(data).forEach(([pid,pd])=>{
+            if(pid !== myId){
+              players[pid] = pd;
+            } else if(pd){
+              // Dados da sala têm prioridade sobre o perfil local —
+              // podem conter edições do Mestre feitas enquanto o jogador estava fora
+              players[myId] = { ...players[myId], ...pd, name: nome };
+            }
+          });
         }
 
-        // Registar este jogador na sala
+        // Registar este jogador na sala (preserva dados actualizados)
         players[myId].lastUp = Date.now();
         await db.ref(`salas/${code}/jogadores/${myId}`).set(players[myId]);
       }
@@ -1863,6 +1871,18 @@ function renderSkills(p,editable){
         <span class="skill-result r-norm" id="sr-${sk.id}"></span>
       </div>`;
     list.appendChild(card);
+    // Restaurar faces dos dados e resultado do último lançamento
+    if(sk.lastRollResults){
+      const best2=Math.max(...sk.lastRollResults);
+      sk.lastRollResults.forEach((r,i)=>{
+        const e=$('d-'+sk.id+'-'+i);
+        if(e){ e.textContent=r; e.className='die'+(r===6?' crit':r===best2?' hi':''); }
+      });
+    }
+    if(sk.lastResult){
+      const srEl=$('sr-'+sk.id);
+      if(srEl){ srEl.textContent=sk.lastResult; srEl.className=sk.lastResultClass||'skill-result r-norm'; }
+    }
   });
 }
 
@@ -1930,6 +1950,7 @@ function finalizeRoll(id, preCalcRes){
       $('modal-new').classList.remove('hidden');
       setTimeout(()=>$('modal-new-inp').focus(),100);
     }
+    sk.lastRollResults=res; sk.lastResult=sr.textContent; sk.lastResultClass=sr.className;
     schSave(); return;
   }
   if(sixes>=2&&sk.level<5){
@@ -1938,6 +1959,7 @@ function finalizeRoll(id, preCalcRes){
     $('mup-name').textContent=sk.name;
     $('mup-txt').textContent=sk.name+' avança para '+LVL_LBL[sk.level]+'! Você rola '+sk.level+'d6.';
     $('modal-up').classList.remove('hidden');
+    sk.lastRollResults=res; sk.lastResult=sr.textContent; sk.lastResultClass=sr.className;
     schSave(); triggerNarrator(sk.name,'upgrade',sk.level); return;
   }
   if(sixes===1&&id!=='fazer-algo'){
@@ -1948,6 +1970,8 @@ function finalizeRoll(id, preCalcRes){
   } else {
     sr.className='skill-result r-norm'; sr.textContent='Resultado '+(hasAnyMod?finalResult:best)+modLabel();
   }
+  // Guardar resultado e faces dos dados para restaurar após re-render
+  sk.lastRollResults=res; sk.lastResult=sr.textContent; sk.lastResultClass=sr.className;
   schSave();
 }
 
@@ -2415,9 +2439,7 @@ function renderPID(){
 function sairDaSala(){
   if(!confirm('Sair da sala? Os teus dados ficam guardados.')) return;
   detachListener();
-  if(firebaseOK && salaId){
-    db.ref('salas/'+salaId+'/jogadores/'+myId).remove().catch(function(){});
-  }
+  // NÃO remove o jogador do Firebase — dados ficam até a sessão ser encerrada pelo Mestre
   salaId = ''; viewId = myId; isMaster = false; players = {};
   var b = document.getElementById('btn-encerrar'); if(b) b.classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
