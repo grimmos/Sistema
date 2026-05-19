@@ -2748,6 +2748,97 @@ function GridLines({ camera, cellSize, width, height }) {
   return <canvas ref={ref} width={width} height={height} style={{ position:"absolute",top:0,left:0,pointerEvents:"none" }} />;
 }
 
+// ── RulerLayer - Réguas horizontal e vertical ──
+function RulerLayer({ camera, cellSize, width, height }) {
+  const refH = useRef(null), refV = useRef(null);
+  const rulerSize = 24;
+  
+  useEffect(() => {
+    const cvH = refH.current; if(!cvH) return;
+    const ctx = cvH.getContext("2d");
+    ctx.clearRect(0,0,width,rulerSize);
+    ctx.fillStyle = "#e8e8e8";
+    ctx.fillRect(0,0,width,rulerSize);
+    ctx.strokeStyle = "#999";
+    ctx.lineWidth = 1;
+    ctx.moveTo(0,rulerSize-1);
+    ctx.lineTo(width,rulerSize-1);
+    ctx.stroke();
+    
+    const sc = cellSize * camera.scale;
+    const ox = ((camera.x%sc)+sc)%sc;
+    const startCell = Math.floor(-camera.x / sc);
+    
+    ctx.fillStyle = "#333";
+    ctx.font = "10px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    
+    for(let x=ox;x<=width;x+=sc){
+      const cell = startCell + Math.round((x - ox)/sc);
+      ctx.beginPath();
+      ctx.strokeStyle = "#999";
+      ctx.lineWidth = 0.5;
+      
+      if(cell % 5 === 0){
+        ctx.moveTo(x, rulerSize - 10);
+        ctx.lineTo(x, rulerSize);
+        ctx.fillText(cell.toString(), x, 6);
+      } else {
+        ctx.moveTo(x, rulerSize - 5);
+        ctx.lineTo(x, rulerSize);
+      }
+      ctx.stroke();
+    }
+  }, [camera, cellSize, width]);
+  
+  useEffect(() => {
+    const cvV = refV.current; if(!cvV) return;
+    const ctx = cvV.getContext("2d");
+    ctx.clearRect(0,0,rulerSize,height);
+    ctx.fillStyle = "#e8e8e8";
+    ctx.fillRect(0,0,rulerSize,height);
+    ctx.strokeStyle = "#999";
+    ctx.lineWidth = 1;
+    ctx.moveTo(rulerSize-1,0);
+    ctx.lineTo(rulerSize-1,height);
+    ctx.stroke();
+    
+    const sc = cellSize * camera.scale;
+    const oy = ((camera.y%sc)+sc)%sc;
+    const startCell = Math.floor(-camera.y / sc);
+    
+    ctx.fillStyle = "#333";
+    ctx.font = "10px monospace";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    
+    for(let y=oy;y<=height;y+=sc){
+      const cell = startCell + Math.round((y - oy)/sc);
+      ctx.beginPath();
+      ctx.strokeStyle = "#999";
+      ctx.lineWidth = 0.5;
+      
+      if(cell % 5 === 0){
+        ctx.moveTo(rulerSize - 10, y);
+        ctx.lineTo(rulerSize, y);
+        ctx.fillText(cell.toString(), rulerSize - 5, y);
+      } else {
+        ctx.moveTo(rulerSize - 5, y);
+        ctx.lineTo(rulerSize, y);
+      }
+      ctx.stroke();
+    }
+  }, [camera, cellSize, height]);
+  
+  return (
+    <>
+      <canvas ref={refH} width={width} height={rulerSize} style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:12 }} />
+      <canvas ref={refV} width={rulerSize} height={height} style={{ position:"absolute",top:rulerSize,left:0,pointerEvents:"none",zIndex:12 }} />
+    </>
+  );
+}
+
 // ── MapImageLayer ──
 function MapImageLayer({ mapTransform, cellSize, cameraScale, canEdit, onUpdate }) {
   const dragging = useRef(false);
@@ -3292,6 +3383,11 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
       onMouseUp={stopPan}
       onMouseLeave={stopPan}
     >
+      {/* Réguas */}
+      <div style={{ position:"absolute",top:0,left:0,right:0,bottom:0,pointerEvents:"none",zIndex:15 }}>
+        <RulerLayer camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
+      </div>
+
       <GridLines camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
 
       <svg style={{ position:"absolute",top:0,left:0,width:size.width,height:size.height,overflow:"visible",pointerEvents: (activeTool === "draw" || activeTool === "fog") ? "none" : "none",zIndex:1 }}>
