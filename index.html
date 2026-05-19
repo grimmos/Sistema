@@ -561,15 +561,18 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 /* ══ ABA: MAPA VTT ══ */
 #tab-mapa {
   padding: 0 !important;
-  /* Sai do fluxo do .wrap — ocupa toda a viewport abaixo do nav */
+  /* Sai do fluxo do .wrap — ocupa toda a viewport */
   position: fixed;
-  top: var(--vtt-top, 110px);   /* ajustado via JS após mount */
+  top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  width: 100%;
+  width: 100vw;
+  height: 100vh;
+  z-index: 99;
   overflow: hidden;
   display: none;           /* mantém o padrão de .chapter */
+  background: #f0f0f0;
 }
 #tab-mapa.active {
   display: block !important;
@@ -1052,6 +1055,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 
   <!-- ABA: MAPA VTT -->
   <div class="chapter" id="tab-mapa">
+    <!-- Botão para sair do mapa e voltar à ficha -->
+    <button onclick="showTab('ficha', $('nav-ficha'))" style="position:fixed; top:12px; left:12px; z-index:100; background:rgba(30,30,30,0.8); color:var(--gold2); border:1px solid var(--gold); border-radius:4px; padding:6px 12px; font-family:'Cinzel',serif; font-size:11px; cursor:pointer; letter-spacing:1px; box-shadow:0 0 10px rgba(0,0,0,0.5);">✕ Sair do Mapa</button>
     <div id="vtt-root"></div>
   </div>
 
@@ -1528,7 +1533,12 @@ async function iniciarSessao(nome, code, criando){
   attachListener();
   setConn(firebaseOK);
   // #19: isMaster já está confirmado neste ponto — botão encerrar aparece correctamente
-  if(isMaster){ const b=$('btn-encerrar'); if(b) b.classList.remove('hidden'); }
+  if(isMaster){ 
+    const b=$('btn-encerrar'); if(b) b.classList.remove('hidden'); 
+    window.isMaster = true; // garante para o React
+  } else {
+    window.isMaster = false;
+  }
   renderAll();
   toast('✦ Bem-vindo, '+nome+'! Sala: '+code, 3000);
   registarSessao(code);
@@ -1564,9 +1574,24 @@ function showTab(id, btn){
   document.querySelectorAll('.mnav-btn').forEach(b=>b.classList.remove('active'));
   $('tab-'+id).classList.add('active');
   btn.classList.add('active');
+
+  // #Ajuste: Esconder cabeçalho e menu se estiver no mapa
+  if(id==='mapa'){
+    $('header').style.display = 'none';
+    $('main-nav').style.display = 'none';
+    $('player-bar').style.display = 'none';
+    // Adicionar um botão flutuante para voltar (opcional, ou apenas via JS se houver atalho)
+    // Para facilitar, vamos deixar o nav visível mas fixo no topo se preferir, 
+    // mas o pedido foi "tirar o sub titulo", indicando esconder o topo.
+    if(typeof window._mountVTT==='function') window._mountVTT();
+  } else {
+    $('header').style.display = 'block';
+    $('main-nav').style.display = 'block';
+    renderPlayerBar(); // restaura se necessário
+  }
+
   if(id==='grupo') renderParty();
   if(id==='perfil'){ renderHistorico(); renderPID(); }
-  if(id==='mapa'){ if(typeof window._mountVTT==='function') window._mountVTT(); }
 }
 
 function showRule(id, btn){
@@ -3026,8 +3051,8 @@ function AddTokenModal({ onAdd, onClose }) {
 }
 
 // ── Styles ──
-const secS = { background:"rgba(20,20,20,0.88)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"6px 8px", display:"flex", flexDirection:"column", gap:5, backdropFilter:"blur(6px)" };
-const lblS = { fontSize:10, color:"rgba(180,170,160,0.7)", textTransform:"uppercase", letterSpacing:"0.08em", userSelect:"none" };
+const secS = { background:"rgba(30,30,30,0.92)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:8, padding:"6px 8px", display:"flex", flexDirection:"column", gap:5, backdropFilter:"blur(8px)", boxShadow: "0 4px 15px rgba(0,0,0,0.4)" };
+const lblS = { fontSize:10, color:"rgba(200,190,180,0.8)", textTransform:"uppercase", letterSpacing:"0.08em", userSelect:"none" };
 
 // ── GMToolbox ──
 function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken }) {
