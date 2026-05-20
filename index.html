@@ -558,6 +558,255 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 .session-btn.end:active{background:rgba(122,26,26,.3);}
 
 
+/* ══ CHAT GLOBAL DE DADOS ══ */
+#chat-fab {
+  position: fixed;
+  bottom: 22px;
+  right: 18px;
+  z-index: 9000;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg,#2a1a06 60%,#3d2a0a);
+  border: 1.5px solid rgba(201,149,42,.55);
+  box-shadow: 0 4px 22px rgba(0,0,0,.65), 0 0 14px rgba(201,149,42,.18);
+  display: none; /* mostrado só quando em sala */
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 22px;
+  transition: box-shadow .2s, transform .15s;
+  user-select: none;
+}
+#chat-fab:hover { box-shadow: 0 6px 28px rgba(0,0,0,.75), 0 0 20px rgba(201,149,42,.3); transform: scale(1.07); }
+#chat-fab:active { transform: scale(.95); }
+#chat-fab .chat-fab-badge {
+  position: absolute;
+  top: -4px; right: -4px;
+  min-width: 18px; height: 18px;
+  background: var(--blood);
+  border-radius: 9px;
+  border: 1.5px solid #1a1008;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px;
+  pointer-events: none;
+  opacity: 0; transition: opacity .2s;
+}
+#chat-fab .chat-fab-badge.show { opacity: 1; }
+
+#chat-panel {
+  position: fixed;
+  bottom: 84px;
+  right: 14px;
+  z-index: 8999;
+  width: min(340px, calc(100vw - 28px));
+  height: min(460px, 62vh);
+  background: linear-gradient(175deg,#120c03 0%,#0a0602 100%);
+  border: 1px solid rgba(201,149,42,.35);
+  border-radius: 5px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.8), 0 0 20px rgba(201,149,42,.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: opacity .2s, transform .2s;
+  transform-origin: bottom right;
+}
+#chat-panel.hidden {
+  opacity: 0; pointer-events: none; transform: scale(.92) translateY(10px);
+}
+
+.chat-panel-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid rgba(201,149,42,.18);
+  background: rgba(201,149,42,.05);
+  flex-shrink: 0;
+}
+.chat-panel-title {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--gold2);
+  text-transform: uppercase;
+}
+.chat-close-btn {
+  background: none; border: none;
+  color: rgba(201,149,42,.45);
+  font-size: 15px; cursor: pointer;
+  line-height: 1; padding: 0 2px;
+  transition: color .15s;
+}
+.chat-close-btn:hover { color: var(--gold2); }
+
+/* Controlo do mestre */
+.chat-master-bar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 14px;
+  border-bottom: 1px solid rgba(201,149,42,.12);
+  background: rgba(201,149,42,.04);
+  flex-shrink: 0;
+}
+.chat-master-bar.show { display: flex; }
+.chat-master-lbl {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: rgba(201,149,42,.55);
+  text-transform: uppercase;
+}
+.chat-toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.chat-toggle-txt {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.chat-toggle {
+  position: relative;
+  width: 34px; height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.chat-toggle input { opacity: 0; width: 0; height: 0; }
+.chat-toggle-slider {
+  position: absolute; inset: 0;
+  background: rgba(201,149,42,.15);
+  border: 1px solid rgba(201,149,42,.3);
+  border-radius: 18px;
+  transition: background .2s;
+}
+.chat-toggle-slider::before {
+  content: '';
+  position: absolute;
+  left: 2px; top: 2px;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: rgba(201,149,42,.4);
+  transition: transform .2s, background .2s;
+}
+.chat-toggle input:checked + .chat-toggle-slider { background: rgba(201,149,42,.2); border-color: rgba(201,149,42,.6); }
+.chat-toggle input:checked + .chat-toggle-slider::before { transform: translateX(16px); background: var(--gold2); }
+
+/* Aviso jogador (chat oculto pelo mestre) */
+.chat-hidden-notice {
+  display: none;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+}
+.chat-hidden-notice.show { display: flex; }
+.chat-hidden-notice p {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: rgba(201,149,42,.3);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* Mensagens */
+#chat-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201,149,42,.15) transparent;
+}
+#chat-msgs::-webkit-scrollbar { width: 3px; }
+#chat-msgs::-webkit-scrollbar-thumb { background: rgba(201,149,42,.18); border-radius: 2px; }
+
+.chat-empty {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: rgba(201,149,42,.22);
+  text-align: center;
+  text-transform: uppercase;
+  margin: auto;
+  padding: 20px 0;
+}
+
+.chat-entry {
+  background: rgba(10,6,2,.6);
+  border: 1px solid rgba(201,149,42,.14);
+  border-radius: 3px;
+  padding: 8px 10px;
+  animation: chatIn .25s ease;
+}
+.chat-entry.entry-crit { border-color: rgba(201,149,42,.45); background: rgba(201,149,42,.07); }
+.chat-entry.entry-good { border-color: rgba(80,180,80,.3); background: rgba(60,130,60,.05); }
+@keyframes chatIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.chat-entry-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+.chat-player-name {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--gold2);
+  text-transform: uppercase;
+}
+.chat-entry-time {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: rgba(201,149,42,.3);
+}
+.chat-skill-name {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  color: rgba(244,234,208,.6);
+  margin-bottom: 5px;
+}
+.chat-dice-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+.chat-die {
+  width: 22px; height: 22px;
+  border-radius: 3px;
+  background: rgba(201,149,42,.1);
+  border: 1px solid rgba(201,149,42,.25);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 11px;
+  color: rgba(244,234,208,.7);
+}
+.chat-die.die-crit { background: rgba(201,149,42,.25); border-color: var(--gold2); color: var(--gold2); }
+.chat-die.die-hi   { background: rgba(201,149,42,.12); border-color: rgba(201,149,42,.5); }
+.chat-result {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+.chat-result.r-norm { color: rgba(244,234,208,.5); }
+.chat-result.r-good { color: rgba(120,220,120,.8); }
+.chat-result.r-crit { color: var(--gold2); }
+
 /* ══ ABA: MAPA VTT ══ */
 #tab-mapa {
   padding: 0 !important;
@@ -1094,6 +1343,44 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 
 <div class="toast" id="toast"></div>
 
+<!-- ══ CHAT GLOBAL DE DADOS ══ -->
+<div id="chat-fab" onclick="toggleChat()">
+  ⚄
+  <span class="chat-fab-badge" id="chat-badge"></span>
+</div>
+
+<div id="chat-panel" class="hidden">
+  <!-- Cabeçalho -->
+  <div class="chat-panel-hdr">
+    <span class="chat-panel-title">✦ Chat de Dados</span>
+    <button class="chat-close-btn" onclick="toggleChat()">✕</button>
+  </div>
+
+  <!-- Barra de controlo do Mestre -->
+  <div class="chat-master-bar" id="chat-master-bar">
+    <span class="chat-master-lbl">Visibilidade dos Jogadores</span>
+    <div class="chat-toggle-wrap">
+      <span class="chat-toggle-txt" id="chat-toggle-txt" style="color:rgba(201,149,42,.35);">Oculto</span>
+      <label class="chat-toggle">
+        <input type="checkbox" id="chat-vis-toggle" onchange="setChatVisibility(this.checked)">
+        <span class="chat-toggle-slider"></span>
+      </label>
+      <span class="chat-toggle-txt" id="chat-toggle-on-txt" style="color:rgba(120,220,120,.7);">Visível</span>
+    </div>
+  </div>
+
+  <!-- Aviso para jogadores quando oculto -->
+  <div class="chat-hidden-notice" id="chat-hidden-notice">
+    <p>⟡</p>
+    <p>O Mestre ocultou<br>o chat de dados</p>
+  </div>
+
+  <!-- Mensagens -->
+  <div id="chat-msgs">
+    <p class="chat-empty" id="chat-empty">Nenhuma rolagem ainda...</p>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════════════════════════════════════
      SCRIPT PRINCIPAL
 ═══════════════════════════════════════════════════════════════ -->
@@ -1310,6 +1597,7 @@ function attachListener(){
       $('app').classList.add('hidden');
       $('lobby').classList.remove('hidden');
       $('lobby').style.display = 'flex';
+      hideChatFab();
       toast('✦ O Mestre encerrou a sessão.', 3000);
       return;
     }
@@ -1347,6 +1635,9 @@ function attachListener(){
     setConn(false);
     console.warn('Firebase listener error:', err);
   });
+  // Mostrar chat FAB e ligar listener do chat
+  showChatFab();
+  attachChatListener();
 }
 
 function detachListener(){
@@ -1354,6 +1645,8 @@ function detachListener(){
     db.ref(`salas/${salaId}/jogadores`).off('value', dbListener);
     dbListener = null;
   }
+  detachChatListener();
+  hideChatFab();
 }
 
 /* ═══════════════════════════════
@@ -2002,6 +2295,7 @@ function finalizeRoll(id, preCalcRes){
     $('modal-new').classList.remove('hidden');
     setTimeout(()=>$('modal-new-inp').focus(),100);
     sk.lastRollResults=res; sk.lastResult=sr.textContent; sk.lastResultClass=sr.className;
+    postRollToChat(sk.name, res, sr.textContent, sr.className);
     schSave(); return;
   }
   if(sixes>=sk.level&&sk.level<5){
@@ -2011,6 +2305,7 @@ function finalizeRoll(id, preCalcRes){
     $('mup-txt').textContent=sk.name+' avança para '+LVL_LBL[sk.level]+'! Você rola '+sk.level+'d6.';
     $('modal-up').classList.remove('hidden');
     sk.lastRollResults=res; sk.lastResult=sr.textContent; sk.lastResultClass=sr.className;
+    postRollToChat(sk.name, res, sr.textContent, sr.className);
     schSave(); triggerNarrator(sk.name,'upgrade',sk.level); return;
   }
   if(sixes===1&&id!=='fazer-algo'){
@@ -2023,6 +2318,7 @@ function finalizeRoll(id, preCalcRes){
   }
   // Guardar resultado e faces dos dados para restaurar após re-render
   sk.lastRollResults=res; sk.lastResult=sr.textContent; sk.lastResultClass=sr.className;
+  postRollToChat(sk.name, res, sr.textContent, sr.className);
   schSave();
 }
 
@@ -2591,6 +2887,193 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   if(slAtk) slAtk.addEventListener('input', ()=>{ $('sl-atk-out').textContent=slAtk.value; });
 });
+
+/* ═══════════════════════════════════════════════════
+   CHAT GLOBAL DE DADOS
+═══════════════════════════════════════════════════ */
+let chatListener      = null;
+let chatSettListener  = null;
+let chatOpen          = false;
+let chatUnread        = 0;
+let chatVisible       = true;   // controlado pelo mestre
+let chatRenderedIds   = new Set(); // evitar duplicar msgs
+
+/* Abrir / Fechar painel */
+function toggleChat(){
+  chatOpen = !chatOpen;
+  const panel = $('chat-panel');
+  panel.classList.toggle('hidden', !chatOpen);
+  if(chatOpen){
+    chatUnread = 0;
+    updateChatBadge();
+    scrollChatToBottom();
+  }
+}
+
+function updateChatBadge(){
+  const badge = $('chat-badge');
+  if(!badge) return;
+  if(chatUnread > 0){
+    badge.textContent = chatUnread > 9 ? '9+' : chatUnread;
+    badge.classList.add('show');
+  } else {
+    badge.classList.remove('show');
+  }
+}
+
+function scrollChatToBottom(){
+  const el = $('chat-msgs');
+  if(el) el.scrollTop = el.scrollHeight;
+}
+
+/* Mostrar o FAB quando entrar numa sala */
+function showChatFab(){
+  const fab = $('chat-fab');
+  if(fab) fab.style.display = 'flex';
+}
+function hideChatFab(){
+  const fab = $('chat-fab');
+  if(fab) fab.style.display = 'none';
+  const panel = $('chat-panel');
+  if(panel) panel.classList.add('hidden');
+  chatOpen = false;
+}
+
+/* Controlo de visibilidade (Mestre) */
+function setChatVisibility(visible){
+  if(!firebaseOK || !salaId || !isMaster) return;
+  db.ref('salas/'+salaId+'/chatSettings/visible').set(visible);
+  updateChatVisUI(visible);
+}
+
+function updateChatVisUI(visible){
+  chatVisible = visible;
+  // Actualizar toggle do mestre
+  const tog = $('chat-vis-toggle');
+  if(tog) tog.checked = visible;
+  // Mostrar/esconder aviso para jogadores
+  const notice  = $('chat-hidden-notice');
+  const msgs    = $('chat-msgs');
+  if(!isMaster){
+    if(notice) notice.classList.toggle('show', !visible);
+    if(msgs)   msgs.style.display = visible ? 'flex' : 'none';
+  }
+}
+
+/* Publicar uma rolagem no chat (Firebase) */
+function postRollToChat(skillName, diceResults, resultText, resultClass){
+  if(!firebaseOK || !salaId) return;
+  const p = me();
+  const displayName = p.charName || p.name || 'Aventureiro';
+  const msg = {
+    playerName : displayName,
+    playerId   : myId,
+    skillName  : skillName,
+    dice       : diceResults,
+    resultText : resultText,
+    resultClass: resultClass || 'r-norm',
+    ts         : Date.now()
+  };
+  db.ref('salas/'+salaId+'/chat').push(msg);
+}
+
+/* Renderizar uma única entrada no chat */
+function renderChatEntry(msgId, msg){
+  if(chatRenderedIds.has(msgId)) return;
+  chatRenderedIds.add(msgId);
+
+  const empty = $('chat-empty');
+  if(empty) empty.style.display = 'none';
+
+  const best = Math.max(...(msg.dice||[1]));
+  const entryClass = msg.resultClass === 'r-crit'
+    ? 'entry-crit'
+    : msg.resultClass === 'r-good'
+    ? 'entry-good' : '';
+
+  const diceHTML = (msg.dice||[]).map(d=>{
+    const cls = d === 6 ? 'die-crit' : d === best ? 'die-hi' : '';
+    return `<div class="chat-die ${cls}">${d}</div>`;
+  }).join('');
+
+  const time = new Date(msg.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+
+  const el = document.createElement('div');
+  el.className = 'chat-entry ' + entryClass;
+  el.innerHTML = `
+    <div class="chat-entry-top">
+      <span class="chat-player-name">${esc(msg.playerName)}</span>
+      <span class="chat-entry-time">${time}</span>
+    </div>
+    <div class="chat-skill-name">${esc(msg.skillName)}</div>
+    <div class="chat-dice-row">${diceHTML}</div>
+    <div class="chat-result ${msg.resultClass||'r-norm'}">${esc(msg.resultText)}</div>`;
+
+  const msgs = $('chat-msgs');
+  if(msgs){
+    msgs.appendChild(el);
+    // Incrementar unread se painel fechado
+    if(!chatOpen){
+      chatUnread++;
+      updateChatBadge();
+    } else {
+      scrollChatToBottom();
+    }
+  }
+}
+
+/* Limpar chat ao entrar numa sala */
+function clearChat(){
+  chatRenderedIds.clear();
+  chatUnread = 0;
+  updateChatBadge();
+  const msgs = $('chat-msgs');
+  if(msgs) msgs.innerHTML = '<p class="chat-empty" id="chat-empty">Nenhuma rolagem ainda...</p>';
+  const notice = $('chat-hidden-notice');
+  if(notice) notice.classList.remove('show');
+}
+
+/* Ligar listener do chat */
+function attachChatListener(){
+  if(!firebaseOK || !salaId) return;
+  clearChat();
+
+  // Listener de visibilidade
+  chatSettListener = db.ref('salas/'+salaId+'/chatSettings/visible').on('value', snap => {
+    const v = snap.exists() ? snap.val() : true;
+    updateChatVisUI(v);
+  });
+
+  // Mostrar barra de controlo ao Mestre
+  const masterBar = $('chat-master-bar');
+  if(masterBar) masterBar.classList.toggle('show', isMaster);
+
+  // Se mestre: criar setting padrão (visível) se não existir
+  if(isMaster){
+    db.ref('salas/'+salaId+'/chatSettings/visible').once('value').then(s=>{
+      if(!s.exists()) db.ref('salas/'+salaId+'/chatSettings/visible').set(true);
+    });
+  }
+
+  // Listener de mensagens — últimas 60
+  const chatRef = db.ref('salas/'+salaId+'/chat').limitToLast(60);
+  chatListener = chatRef.on('child_added', snap => {
+    const msg = snap.val();
+    if(msg) renderChatEntry(snap.key, msg);
+  });
+}
+
+/* Desligar listener */
+function detachChatListener(){
+  if(chatListener && firebaseOK && salaId){
+    db.ref('salas/'+salaId+'/chat').off('child_added', chatListener);
+    chatListener = null;
+  }
+  if(chatSettListener && firebaseOK && salaId){
+    db.ref('salas/'+salaId+'/chatSettings/visible').off('value', chatSettListener);
+    chatSettListener = null;
+  }
+}
 
 </script>
 
