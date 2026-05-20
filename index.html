@@ -1511,6 +1511,17 @@ function emptyPlayer(name, bio=''){
   };
 }
 
+// Sanitiza uma ficha recuperada — garante invariantes do sistema
+function sanitizeFicha(p){
+  if(!p) return p;
+  // Fazer Algo é sempre Nível I
+  if(Array.isArray(p.skills)){
+    const fa = p.skills.find(s=>s.id==='fazer-algo');
+    if(fa) fa.level = 1;
+  }
+  return p;
+}
+
 function me(){ return players[myId] || (players[myId] = emptyPlayer(myName)); }
 
 /* ── #4: resolveTargetId — fonte única de verdade para o ID do alvo ── */
@@ -1606,6 +1617,7 @@ function attachListener(){
     // se propaguem ao jogador em tempo real. Pular pids "dirty" para não esmagar
     // edições locais ainda não salvas (anti-race do debounce).
     Object.entries(data).forEach(([pid, pdata]) => {
+      if(!pdata) return; // guard contra entradas nulas no Firebase
       if(isDirty(pid)) return;
       players[pid] = pdata;
     });
@@ -1757,7 +1769,7 @@ async function iniciarSessao(nome, code, criando){
   const pidFixo = getOrCreatePID();
   const fichaRecuperada = await recuperarFichaFirebase(pidFixo);
   if(fichaRecuperada){
-    players[myId] = { ...emptyPlayer(nome, bio), ...fichaRecuperada, name: nome, lastUp: Date.now() };
+    players[myId] = { ...emptyPlayer(nome, bio), ...sanitizeFicha(fichaRecuperada), name: nome, lastUp: Date.now() };
     toast('✦ Ficha recuperada!', 2000);
   } else {
     // tentar localStorage como fallback
@@ -2126,23 +2138,24 @@ function renderSkillsMaster(p){
   addRow.innerHTML=`
     <input id="master-sk-name" class="desc-inp" type="text" placeholder="Nome da perícia..." maxlength="30" autocomplete="off" style="flex:1;min-width:120px;">
     <select id="master-sk-lvl" class="qty-inp" style="width:70px;">
-      <option value="1">Nv I</option><option value="2">Nv II</option><option value="3">Nv III</option><option value="4">Nv IV</option><option value="5">Nv V</option>
+      <option value="2">Nv II</option><option value="3">Nv III</option><option value="4">Nv IV</option><option value="5">Nv V</option>
     </select>
     <button class="add-btn" onclick="masterAddSkill()">+</button>`;
   list.appendChild(addRow);
 
   skills.forEach((sk,idx)=>{
     const max=sk.level>=5;
+    const isFazerAlgo=sk.id==='fazer-algo';
     const card=document.createElement('div');
     card.style.cssText='background:rgba(10,6,2,.55);border:1px solid rgba(201,149,42,.18);border-radius:3px;padding:10px 12px;margin-bottom:8px;';
     const curMod=sk.modifier||0;
     card.innerHTML=`
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-        <span style="font-family:'Cinzel',serif;font-size:13px;color:var(--gold2);">${esc(sk.name)}</span>
+        <span style="font-family:'Cinzel',serif;font-size:13px;color:var(--gold2);">${esc(sk.name)}${isFazerAlgo?' <span style="font-size:9px;color:rgba(201,149,42,.4);">🔒 Nv I fixo</span>':''}</span>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <button class="roll-btn" style="padding:4px 8px;font-size:9px;" onclick="masterSkillLevel('${sk.id}',-1)" ${sk.level<=1?'disabled':''}>−</button>
+          <button class="roll-btn" style="padding:4px 8px;font-size:9px;" onclick="masterSkillLevel('${sk.id}',-1)" ${sk.level<=1||isFazerAlgo?'disabled':''}>−</button>
           <span style="font-family:'Cinzel',serif;font-size:11px;color:rgba(201,149,42,.7);min-width:70px;text-align:center;">${LVL_LBL[sk.level]}</span>
-          <button class="roll-btn" style="padding:4px 8px;font-size:9px;" onclick="masterSkillLevel('${sk.id}',+1)" ${max?'disabled':''}>+</button>
+          <button class="roll-btn" style="padding:4px 8px;font-size:9px;" onclick="masterSkillLevel('${sk.id}',+1)" ${max||isFazerAlgo?'disabled':''}>+</button>
           <span style="font-family:'Cinzel',serif;font-size:9px;color:rgba(201,149,42,.4);letter-spacing:1px;margin-left:6px;">MOD</span>
           <button class="roll-btn" style="padding:4px 7px;font-size:9px;" onclick="masterSkillModifier('${sk.id}',-1)">−</button>
           <span id="skmod-${sk.id}" style="font-family:'Cinzel',serif;font-size:11px;min-width:28px;text-align:center;color:${curMod<0?'#e08080':curMod>0?'#80d080':'rgba(201,149,42,.5)'};">${curMod>0?'+':''}${curMod}</span>
@@ -2160,14 +2173,17 @@ function masterAddSkill(){
   if(!name){ toast('Digite o nome da perícia!'); return; }
   const p = targetOrWarn(); if(!p) return;
   p.skills=p.skills||[];
+  // Não permitir nível 1 em novas perícias (só Fazer Algo pode ser nível I)
+  const lvlFinal = Math.max(2, level);
   const nid=name.toLowerCase().replace(/\s+/g,'_')+'_'+genId().slice(0,4);
-  p.skills.push({id:nid,name,level,rolling:false});
+  p.skills.push({id:nid,name,level:lvlFinal,rolling:false});
   nameEl.value='';
   renderSkillsMaster(p); schSave();
-  toast('✦ Perícia "'+name+'" adicionada ao jogador!');
+  toast('✦ Perícia "'+name+'" (Nv '+lvlFinal+') adicionada ao jogador!');
 }
 
 function masterSkillLevel(skId, delta){
+  if(skId==='fazer-algo'){ toast('Fazer Algo é sempre Nível I — não pode ser alterada.'); return; }
   const p = targetOrWarn(); if(!p || !p.skills) return;
   const sk=p.skills.find(s=>s.id===skId); if(!sk) return;
   sk.level=Math.min(5,Math.max(1,sk.level+delta));
@@ -2184,6 +2200,7 @@ function masterSkillModifier(skId, delta){
 }
 
 function masterRemoveSkill(skId){
+  if(skId==='fazer-algo'){ toast('Fazer Algo não pode ser removida.'); return; }
   const p = targetOrWarn(); if(!p || !p.skills) return;
   const idx=p.skills.findIndex(s=>s.id===skId); if(idx<0) return;
   const name=p.skills[idx].name;
@@ -2197,6 +2214,9 @@ function masterRemoveSkill(skId){
 function renderSkills(p,editable){
   const list=$('skill-list'); list.innerHTML='';
   const skills=p.skills||[{id:'fazer-algo',name:'Fazer Algo',level:1,rolling:false}];
+  // Garantir que fazer-algo é sempre Nível I
+  const fa = skills.find(s=>s.id==='fazer-algo');
+  if(fa && fa.level !== 1){ fa.level = 1; }
   skills.forEach(sk=>{
     const max=sk.level>=5;
     const card=document.createElement('div');
@@ -2289,6 +2309,8 @@ function finalizeRoll(id, preCalcRes){
 
   if(id==='fazer-algo'&&sixes>=1){
     // Fazer Algo permanece sempre Nível I — qualquer 6 abre nova perícia
+    // Forçar nível 1 por segurança (ex: dados importados com nível errado)
+    if(sk.level !== 1){ sk.level = 1; }
     sr.className='skill-result r-crit';
     sr.textContent='✦ Crítico! Nova perícia desbloqueada!';
     $('modal-new-inp').value='';
@@ -2325,7 +2347,9 @@ function finalizeRoll(id, preCalcRes){
 function confirmNewSkill(){
   const name=$('modal-new-inp').value.trim();
   if(!name){ toast('Digite um nome!'); return; }
+  if(isMaster){ closeModalNew(); return; } // mestre não tem ficha própria
   const p=me();
+  p.skills = p.skills || [];
   const nid=name.toLowerCase().replace(/\s+/g,'_')+'_'+genId().slice(0,4);
   p.skills.push({id:nid,name,level:2,rolling:false});
   closeModalNew(); renderSkills(p,true); schSave();
@@ -2334,7 +2358,7 @@ function confirmNewSkill(){
 }
 
 function closeModalNew(){ $('modal-new').classList.add('hidden'); }
-function closeModalUp(){ $('modal-up').classList.add('hidden'); renderSkills(me(),true); schSave(); }
+function closeModalUp(){ $('modal-up').classList.add('hidden'); if(!isMaster){ renderSkills(me(),true); schSave(); } }
 
 /* ═══════════════════════════════
    NARRADOR LOCAL (#1: API removida — frases épicas hardcoded evitam CORS/401)
@@ -2707,7 +2731,12 @@ function importarFicha(evt){
       if(typeof dados.strikes === 'number') p.totalStrikes = dados.strikes;
       if(Array.isArray(dados.ferimentos))   p.wounds       = dados.ferimentos;
       if(typeof dados.sorte === 'number')   p.luck         = dados.sorte;
-      if(Array.isArray(dados.pericias))     p.skills       = dados.pericias;
+      if(Array.isArray(dados.pericias)){
+        p.skills = dados.pericias;
+        // Garantir fazer-algo sempre Nível I após importação
+        const fa = p.skills.find(s=>s.id==='fazer-algo');
+        if(fa) fa.level = 1;
+      }
       if(Array.isArray(dados.mochila))      p.bag          = dados.mochila;
       renderAll();
       schSave();
@@ -2856,8 +2885,9 @@ async function encerrarSessao(){
 ═══════════════════════════════ */
 function saveCharName(){
   const p = targetOrWarn(); if(!p) return;
-  p.charName = $('char-name').value;
-  schSave(); // autosave em tempo real (oninput) — listener propaga ao outro lado
+  const inp = $('char-name'); if(!inp) return;
+  p.charName = inp.value;
+  schSave();
 }
 
 /* ═══════════════════════════════
