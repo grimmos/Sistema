@@ -118,8 +118,10 @@ body::before{
 .hdr-session{font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:rgba(201,149,42,.35);}
 .hdr-session .code{color:var(--gold2);letter-spacing:4px;cursor:pointer;}
 .hdr-conn{display:flex;align-items:center;gap:4px;font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;}
-.conn-dot{width:6px;height:6px;border-radius:50%;background:#7be89a;box-shadow:0 0 5px rgba(123,232,154,.5);}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:#7be89a;box-shadow:0 0 5px rgba(123,232,154,.5);transition:background .3s;}
 .conn-dot.off{background:#e08080;box-shadow:0 0 5px rgba(224,128,128,.4);}
+.conn-dot.saving{background:#e09a3a;box-shadow:0 0 5px rgba(224,154,58,.4);animation:savePulse .65s ease-in-out infinite;}
+@keyframes savePulse{0%,100%{opacity:1;}50%{opacity:.35;}}
 .conn-txt{color:rgba(201,149,42,.4);}
 
 /* ═══════════════════════════════════════
@@ -830,6 +832,478 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
   width: 100%;
   height: 100%;
 }
+@keyframes pingPulse {
+  0%   { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* ══ CHAT: ABAS ══ */
+.chat-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(201,149,42,.18);
+  flex-shrink: 0;
+}
+.chat-tab-btn {
+  flex: 1;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 7px 4px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(201,149,42,.35);
+  cursor: pointer;
+  transition: all .2s;
+}
+.chat-tab-btn.active {
+  color: var(--gold2);
+  border-bottom-color: var(--gold2);
+}
+
+/* ══ CHAT: INPUT AREA ══ */
+.chat-input-area {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(201,149,42,.14);
+  background: rgba(0,0,0,.25);
+  flex-shrink: 0;
+}
+.chat-text-inp {
+  flex: 1;
+  background: rgba(10,6,2,.85);
+  border: 1px solid rgba(201,149,42,.22);
+  color: rgba(244,234,208,.85);
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 3px;
+  outline: none;
+  transition: border-color .2s;
+}
+.chat-text-inp:focus { border-color: rgba(201,149,42,.55); }
+.chat-text-inp::placeholder { color: rgba(201,149,42,.25); }
+.chat-send-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  padding: 7px 12px;
+  border: 1px solid rgba(201,149,42,.4);
+  background: rgba(201,149,42,.1);
+  color: var(--gold2);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.chat-send-btn:hover { background: rgba(201,149,42,.18); }
+.chat-send-btn:active { transform: scale(.97); }
+
+/* ══ CHAT: ENTRADA DE TEXTO LIVRE ══ */
+.chat-entry.entry-msg {
+  border-color: rgba(201,149,42,.1);
+  background: rgba(0,0,0,.35);
+}
+.chat-msg-body {
+  font-size: 13px;
+  color: rgba(244,234,208,.75);
+  line-height: 1.55;
+  margin-top: 2px;
+}
+.chat-roll-shortcut {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: rgba(201,149,42,.3);
+  padding: 4px 10px 0;
+  border-top: 1px solid rgba(201,149,42,.08);
+  margin-top: 4px;
+}
+
+/* ══ TRACKER FAB ══ */
+#tracker-fab {
+  position: fixed;
+  bottom: 84px;
+  right: 18px;
+  z-index: 9000;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg,#1a0606 60%,#2a0a0a);
+  border: 1.5px solid rgba(200,80,60,.55);
+  box-shadow: 0 4px 22px rgba(0,0,0,.65), 0 0 14px rgba(200,80,60,.15);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
+  transition: box-shadow .2s, transform .15s;
+  user-select: none;
+}
+#tracker-fab:hover { box-shadow: 0 6px 28px rgba(0,0,0,.75), 0 0 20px rgba(200,80,60,.3); transform: scale(1.07); }
+#tracker-fab:active { transform: scale(.95); }
+#tracker-fab .tracker-fab-badge {
+  position: absolute;
+  top: -4px; right: -4px;
+  min-width: 18px; height: 18px;
+  background: #7a1a1a;
+  border-radius: 9px;
+  border: 1.5px solid #1a0606;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px;
+  pointer-events: none;
+  opacity: 0; transition: opacity .2s;
+}
+#tracker-fab .tracker-fab-badge.show { opacity: 1; }
+
+/* ══ TRACKER PANEL ══ */
+#tracker-panel {
+  position: fixed;
+  bottom: 84px;
+  right: 80px;
+  z-index: 8998;
+  width: min(320px, calc(100vw - 28px));
+  height: min(500px, 68vh);
+  background: linear-gradient(175deg,#120303 0%,#0a0202 100%);
+  border: 1px solid rgba(200,80,60,.35);
+  border-radius: 5px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.8), 0 0 20px rgba(200,80,60,.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: opacity .2s, transform .2s;
+  transform-origin: bottom right;
+}
+#tracker-panel.hidden {
+  opacity: 0; pointer-events: none; transform: scale(.92) translateY(10px);
+}
+.tracker-panel-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid rgba(200,80,60,.2);
+  background: rgba(200,80,60,.06);
+  flex-shrink: 0;
+}
+.tracker-panel-title {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #e08080;
+  text-transform: uppercase;
+}
+.tracker-close-btn {
+  background: none; border: none;
+  color: rgba(200,80,60,.45);
+  font-size: 15px; cursor: pointer;
+  line-height: 1; padding: 0 2px;
+  transition: color .15s;
+}
+.tracker-close-btn:hover { color: #e08080; }
+
+.tracker-round-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(200,80,60,.15);
+  background: rgba(200,80,60,.04);
+  flex-shrink: 0;
+  gap: 8px;
+}
+.tracker-round-lbl {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: rgba(200,80,60,.55);
+  text-transform: uppercase;
+}
+.tracker-round-num {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 18px;
+  color: #e08080;
+  min-width: 28px;
+  text-align: center;
+}
+.tracker-ctrl-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  letter-spacing: 1px;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all .15s;
+  text-transform: uppercase;
+}
+.tracker-ctrl-btn.next {
+  border: 1px solid rgba(200,80,60,.5);
+  background: rgba(200,80,60,.12);
+  color: #e08080;
+}
+.tracker-ctrl-btn.next:hover { background: rgba(200,80,60,.22); }
+.tracker-ctrl-btn.reset {
+  border: 1px solid rgba(201,149,42,.25);
+  background: transparent;
+  color: rgba(201,149,42,.4);
+}
+.tracker-ctrl-btn.reset:hover { background: rgba(201,149,42,.08); }
+
+#tracker-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(200,80,60,.15) transparent;
+}
+#tracker-list::-webkit-scrollbar { width: 3px; }
+#tracker-list::-webkit-scrollbar-thumb { background: rgba(200,80,60,.18); border-radius: 2px; }
+
+.tracker-empty {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: rgba(200,80,60,.22);
+  text-align: center;
+  text-transform: uppercase;
+  margin: auto;
+  padding: 20px 0;
+}
+.tracker-entry {
+  background: rgba(10,4,4,.6);
+  border: 1px solid rgba(200,80,60,.14);
+  border-radius: 3px;
+  padding: 7px 9px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: background .2s, border-color .2s;
+  position: relative;
+}
+.tracker-entry.active-turn {
+  border-color: rgba(200,80,60,.6);
+  background: rgba(200,80,60,.1);
+  box-shadow: 0 0 10px rgba(200,80,60,.2);
+}
+.tracker-entry-init {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 15px;
+  color: #e08080;
+  min-width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.tracker-entry.active-turn .tracker-entry-init { color: #ffaaaa; }
+.tracker-entry-name {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  color: rgba(244,234,208,.8);
+  flex: 1;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tracker-entry.active-turn .tracker-entry-name { color: #ffd0d0; }
+.tracker-entry-hp {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  color: rgba(120,200,120,.8);
+  min-width: 38px;
+  text-align: center;
+}
+.tracker-entry-turn-arrow {
+  position: absolute;
+  left: -4px;
+  font-size: 10px;
+  color: #e08080;
+  display: none;
+}
+.tracker-entry.active-turn .tracker-entry-turn-arrow { display: block; }
+.tracker-entry-rm {
+  background: none;
+  border: none;
+  color: rgba(200,80,60,.3);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color .15s;
+}
+.tracker-entry-rm:hover { color: #e08080; }
+.tracker-hp-btn {
+  background: rgba(200,80,60,.1);
+  border: 1px solid rgba(200,80,60,.2);
+  color: #e08080;
+  cursor: pointer;
+  font-size: 11px;
+  width: 18px; height: 18px;
+  border-radius: 2px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+.tracker-hp-btn:hover { background: rgba(200,80,60,.22); }
+
+.tracker-add-row {
+  display: flex;
+  gap: 5px;
+  padding: 8px 9px;
+  border-top: 1px solid rgba(200,80,60,.12);
+  background: rgba(200,80,60,.03);
+  flex-shrink: 0;
+}
+.tracker-add-inp {
+  flex: 1;
+  background: rgba(10,4,4,.85);
+  border: 1px solid rgba(200,80,60,.22);
+  color: rgba(244,234,208,.8);
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  padding: 5px 8px;
+  border-radius: 3px;
+  outline: none;
+  min-width: 0;
+}
+.tracker-add-inp::placeholder { color: rgba(200,80,60,.25); }
+.tracker-add-inp:focus { border-color: rgba(200,80,60,.5); }
+.tracker-init-inp {
+  width: 44px;
+  background: rgba(10,4,4,.85);
+  border: 1px solid rgba(200,80,60,.22);
+  color: #e08080;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  padding: 5px 6px;
+  border-radius: 3px;
+  outline: none;
+  text-align: center;
+}
+.tracker-init-inp:focus { border-color: rgba(200,80,60,.5); }
+.tracker-add-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  padding: 5px 9px;
+  border: 1px solid rgba(200,80,60,.4);
+  background: rgba(200,80,60,.12);
+  color: #e08080;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+}
+.tracker-add-btn:hover { background: rgba(200,80,60,.22); }
+
+.tracker-roll-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-top: 1px solid rgba(200,80,60,.1);
+  background: rgba(0,0,0,.2);
+  flex-shrink: 0;
+  gap: 6px;
+}
+.tracker-roll-lbl {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: rgba(200,80,60,.45);
+  text-transform: uppercase;
+}
+.tracker-roll-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  letter-spacing: 1px;
+  padding: 5px 12px;
+  border: 1px solid rgba(200,80,60,.4);
+  background: rgba(200,80,60,.1);
+  color: #e08080;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all .15s;
+  text-transform: uppercase;
+}
+.tracker-roll-btn:hover { background: rgba(200,80,60,.22); }
+
+/* ══ HANDOUT MODAL ══ */
+#handout-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  background: rgba(0,0,0,.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(6px);
+  animation: handoutIn .3s ease;
+}
+#handout-modal.hidden { display: none; }
+@keyframes handoutIn {
+  from { opacity: 0; transform: scale(.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.handout-inner {
+  background: linear-gradient(160deg,#1a1008,#0f0a04);
+  border: 1px solid rgba(201,149,42,.4);
+  border-radius: 5px;
+  padding: 20px;
+  max-width: min(520px, 92vw);
+  width: 100%;
+  position: relative;
+}
+.handout-inner::before {
+  content:'';position:absolute;top:0;left:0;width:3px;height:100%;
+  background:linear-gradient(to bottom,var(--gold),var(--blood),transparent);
+  opacity:.5;border-radius:3px 0 0 3px;
+}
+.handout-title-txt {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 15px;
+  color: var(--gold2);
+  text-align: center;
+  margin-bottom: 14px;
+  letter-spacing: 2px;
+}
+.handout-img {
+  width: 100%;
+  max-height: 55vh;
+  object-fit: contain;
+  border-radius: 3px;
+  border: 1px solid rgba(201,149,42,.2);
+  display: block;
+}
+.handout-footer {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.handout-close-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  padding: 9px 20px;
+  border: 1px solid rgba(201,149,42,.3);
+  background: transparent;
+  color: rgba(201,149,42,.6);
+  border-radius: 3px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all .15s;
+}
+.handout-close-btn:hover { background: rgba(201,149,42,.08); }
 </style>
 <!-- React + Babel para o VTTGrid -->
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -1026,7 +1500,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
       <div class="dash-skills">
         <div class="dcard">
           <p class="dcard-title">Perícias</p>
-          <p style="font-size:12px;color:rgba(244,234,208,.35);font-style:italic;margin-bottom:10px;">6 = nova perícia · duplo 6 = avança nível</p>
+          <p style="font-size:12px;color:rgba(244,234,208,.35);font-style:italic;margin-bottom:10px;">Nv I: 1 seis = nova perícia · Nv II: 2 seis · Nv III: 3 seis · ... = avança nível</p>
           <div class="ai-box" id="ai-box"><p class="ai-lbl">✦ Narrador ✦</p><p class="ai-txt" id="ai-txt"></p></div>
           <div class="skills-scroll">
             <div id="skill-list" style="margin-top:6px;"></div>
@@ -1075,16 +1549,16 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
     <div class="rchapter" id="r-pericias">
       <div class="ch-head"><p class="ch-num">Capítulo II</p><h2 class="ch-title">Perícias</h2><div class="ch-ornament"><div class="ch-orn-line rev"></div><span style="color:rgba(201,149,42,.4);font-size:12px;">⬟</span><div class="ch-orn-line"></div></div></div>
       <div class="arcane-quote"><p>"Tudo pode se tornar uma perícia.<br>A excelência nasce do acerto perfeito."</p></div>
-      <div class="scroll"><div class="scroll-title">Origem &amp; Evolução</div><p>Todo aventureiro começa com <span class="tag tag-gold">Fazer Algo (I)</span>. Um <strong style="color:var(--gold2)">6 no dado</strong> desbloqueia uma nova perícia que nasce no <strong style="color:var(--gold2)">Nível II</strong>. Dois 6s simultâneos em qualquer perícia a avançam de nível.</p></div>
+      <div class="scroll"><div class="scroll-title">Origem &amp; Evolução</div><p>Todo aventureiro começa com <span class="tag tag-gold">Fazer Algo (I)</span>. Um <strong style="color:var(--gold2)">6 no dado</strong> desbloqueia uma nova perícia que nasce no <strong style="color:var(--gold2)">Nível II</strong>. Para avançar de nível, é preciso tirar <strong style="color:var(--gold2)">todos os dados em 6</strong> ao mesmo tempo — 2 seis para subir do II, 3 seis para subir do III, e assim por diante.</p></div>
       <div class="scroll"><div class="scroll-title">Árvore de Progressão</div>
         <div class="pericia-wrap">
-          <div class="pericia-lvl"><span class="p-lvl-tag">Nível I</span><div class="p-nodes"><div class="p-node lv1"><div class="p-node-name">Fazer Algo</div><div class="p-node-dice">rola 1d6</div></div></div></div>
-          <div class="pericia-lvl"><span class="p-lvl-tag">Nível II</span><div class="p-nodes"><div class="p-node lv2"><div class="p-node-name">Nova Perícia</div><div class="p-node-dice">2d6 · maior vale ✦ nascida aqui</div></div></div></div>
-          <div class="pericia-lvl"><span class="p-lvl-tag">Nível III</span><div class="p-nodes"><div class="p-node lv3"><div class="p-node-name">Perícia</div><div class="p-node-dice">3d6 · maior vale</div></div></div></div>
-          <div class="pericia-lvl"><span class="p-lvl-tag">Nível IV</span><div class="p-nodes"><div class="p-node lv4"><div class="p-node-name">Perícia</div><div class="p-node-dice">4d6 · maior vale</div></div></div></div>
+          <div class="pericia-lvl"><span class="p-lvl-tag">Nível I</span><div class="p-nodes"><div class="p-node lv1"><div class="p-node-name">Fazer Algo</div><div class="p-node-dice">rola 1d6 · 1 seis = nova perícia</div></div></div></div>
+          <div class="pericia-lvl"><span class="p-lvl-tag">Nível II</span><div class="p-nodes"><div class="p-node lv2"><div class="p-node-name">Nova Perícia</div><div class="p-node-dice">2d6 · maior vale · 2 seis = sobe</div></div></div></div>
+          <div class="pericia-lvl"><span class="p-lvl-tag">Nível III</span><div class="p-nodes"><div class="p-node lv3"><div class="p-node-name">Perícia</div><div class="p-node-dice">3d6 · maior vale · 3 seis = sobe</div></div></div></div>
+          <div class="pericia-lvl"><span class="p-lvl-tag">Nível IV</span><div class="p-nodes"><div class="p-node lv4"><div class="p-node-name">Perícia</div><div class="p-node-dice">4d6 · maior vale · 4 seis = sobe</div></div></div></div>
           <div class="pericia-lvl"><span class="p-lvl-tag">Nível V</span><div class="p-nodes"><div class="p-node lv5"><div class="p-node-name">✦ Máximo ✦</div><div class="p-node-dice">5d6 — limite absoluto</div></div></div></div>
         </div>
-        <p style="font-size:13px;color:rgba(244,234,208,.4);font-style:italic;margin-top:6px;">Duplo 6 em qualquer nível avança para o próximo.</p>
+        <p style="font-size:13px;color:rgba(244,234,208,.4);font-style:italic;margin-top:6px;">Para subir de nível, todos os dados precisam mostrar 6 simultaneamente.</p>
       </div>
       <div class="ch-end"><div class="orn-line"></div><p>✦ A prática forja o mestre ✦</p></div>
     </div>
@@ -1330,8 +1804,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 <!-- Modal upgrade -->
 <div class="modal-bg hidden" id="modal-up">
   <div class="modal">
-    <div class="modal-star" style="font-size:36px;">✦✦</div>
-    <p class="modal-title">Duplo Crítico!</p>
+    <div class="modal-star" id="mup-stars" style="font-size:36px;">✦✦</div>
+    <p class="modal-title" id="mup-title">Crítico Perfeito!</p>
     <p class="modal-sub">Perícia avança de nível</p>
     <p class="modal-up-name" id="mup-name"></p>
     <p class="modal-up-txt" id="mup-txt"></p>
@@ -1352,8 +1826,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 <div id="chat-panel" class="hidden">
   <!-- Cabeçalho -->
   <div class="chat-panel-hdr">
-    <span class="chat-panel-title">✦ Chat de Dados</span>
+    <span class="chat-panel-title">✦ Chat da Mesa</span>
     <button class="chat-close-btn" onclick="toggleChat()">✕</button>
+  </div>
+
+  <!-- Abas -->
+  <div class="chat-tabs">
+    <button class="chat-tab-btn active" id="chat-tab-all" onclick="switchChatTab('all')">⚄ Tudo</button>
+    <button class="chat-tab-btn" id="chat-tab-rolls" onclick="switchChatTab('rolls')">🎲 Rolagens</button>
+    <button class="chat-tab-btn" id="chat-tab-msgs" onclick="switchChatTab('msgs')">💬 Chat</button>
   </div>
 
   <!-- Barra de controlo do Mestre -->
@@ -1377,7 +1858,65 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 
   <!-- Mensagens -->
   <div id="chat-msgs">
-    <p class="chat-empty" id="chat-empty">Nenhuma rolagem ainda...</p>
+    <p class="chat-empty" id="chat-empty">Silêncio na taverna...</p>
+  </div>
+
+  <!-- Input de texto -->
+  <div class="chat-input-area" id="chat-input-area">
+    <input class="chat-text-inp" id="chat-text-inp" type="text" placeholder="Mensagem ou /r NomePerícia..." maxlength="200" autocomplete="off">
+    <button class="chat-send-btn" onclick="sendChatMessage()">✦</button>
+  </div>
+  <div class="chat-roll-shortcut" id="chat-shortcut-hint">Dica: /r Atirar para rolar uma perícia</div>
+</div>
+
+<!-- Tracker FAB -->
+<div id="tracker-fab" onclick="toggleTracker()" title="Rastreador de Iniciativa">
+  ⚔️
+  <span class="tracker-fab-badge" id="tracker-badge"></span>
+</div>
+
+<!-- Tracker Panel -->
+<div id="tracker-panel" class="hidden">
+  <div class="tracker-panel-hdr">
+    <span class="tracker-panel-title">⚔ Iniciativa</span>
+    <button class="tracker-close-btn" onclick="toggleTracker()">✕</button>
+  </div>
+
+  <!-- Barra de rodada + controles GM -->
+  <div class="tracker-round-bar">
+    <span class="tracker-round-lbl">Rodada</span>
+    <span class="tracker-round-num" id="tracker-round">1</span>
+    <button class="tracker-ctrl-btn reset" onclick="resetTracker()" id="tracker-btn-reset" style="display:none;">↺ Zerar</button>
+    <button class="tracker-ctrl-btn next" onclick="nextTrackerTurn()" id="tracker-btn-next" style="display:none;">→ Próximo</button>
+  </div>
+
+  <!-- Lista de participantes -->
+  <div id="tracker-list">
+    <p class="tracker-empty" id="tracker-empty">Nenhum participante ainda.</p>
+  </div>
+
+  <!-- Rolar iniciativa (jogador) -->
+  <div class="tracker-roll-bar" id="tracker-roll-bar" style="display:none;">
+    <span class="tracker-roll-lbl">Minha iniciativa</span>
+    <button class="tracker-roll-btn" onclick="rollMyInitiative()">⚄ Rolar 1d6</button>
+  </div>
+
+  <!-- Adicionar participante (GM) -->
+  <div class="tracker-add-row" id="tracker-add-row" style="display:none;">
+    <input class="tracker-add-inp" id="tracker-add-name" type="text" placeholder="Nome..." maxlength="20" autocomplete="off">
+    <input class="tracker-init-inp" id="tracker-add-init" type="number" min="1" max="6" value="1" placeholder="Init">
+    <button class="tracker-add-btn" onclick="addTrackerEntry()">+ Add</button>
+  </div>
+</div>
+
+<!-- Handout Modal -->
+<div id="handout-modal" class="hidden">
+  <div class="handout-inner">
+    <p class="handout-title-txt" id="handout-title-txt">📜 Revelação do Mestre</p>
+    <img class="handout-img" id="handout-img" src="" alt="handout">
+    <div class="handout-footer">
+      <button class="handout-close-btn" onclick="closeHandout()">Fechar ✕</button>
+    </div>
   </div>
 </div>
 
@@ -1551,6 +2090,7 @@ function isMe(){ return !isMaster && (viewId===myId || !viewId); }
 function setConn(ok){
   const dot=$('conn-dot'), txt=$('conn-txt');
   if(!dot || !txt) return; // ainda na auth-screen / lobby — não há header
+  dot.classList.remove('saving');
   dot.className='conn-dot'+(ok?'':' off');
   txt.textContent=ok?'online':'offline';
 }
@@ -1569,6 +2109,9 @@ function salaRef(path=''){
 }
 
 function schSave(){
+  // FIX #7: mostrar indicador de "salvando" no conn-dot
+  const dot = $('conn-dot');
+  if(dot && !dot.classList.contains('off')) dot.classList.add('saving');
   // Marca o pid como "dirty" para o listener não sobrescrever durante o debounce
   const tid = isMaster ? resolveTargetId() : myId;
   if(tid) markDirty(tid);
@@ -1577,12 +2120,12 @@ function schSave(){
 }
 
 function saveNow(){
-  if(!firebaseOK){ return; }
+  if(!firebaseOK){ const dot=$('conn-dot'); if(dot) dot.classList.remove('saving'); return; }
   if(isMaster){
     const tid = resolveTargetId();
-    if(!tid) return;
+    if(!tid){ const dot=$('conn-dot'); if(dot) dot.classList.remove('saving'); return; }
     const p = players[tid];
-    if(!p) return;
+    if(!p){ const dot=$('conn-dot'); if(dot) dot.classList.remove('saving'); return; }
     p.lastUp = Date.now();
     db.ref(`salas/${salaId}/jogadores/${tid}`).set(p)
       .then(()=>{ setConn(true); clearDirty(tid); })
@@ -1650,6 +2193,9 @@ function attachListener(){
   // Mostrar chat FAB e ligar listener do chat
   showChatFab();
   attachChatListener();
+  showTrackerFab();
+  attachTrackerListener();
+  attachHandoutListener();
 }
 
 function detachListener(){
@@ -1658,7 +2204,10 @@ function detachListener(){
     dbListener = null;
   }
   detachChatListener();
+  detachTrackerListener();
+  detachHandoutListener();
   hideChatFab();
+  hideTrackerFab();
 }
 
 /* ═══════════════════════════════
@@ -1844,6 +2393,8 @@ async function iniciarSessao(nome, code, criando){
   } else {
     window.isMaster = false;
   }
+  // FIX #3: notificar VTT via CustomEvent (evita polling com setInterval)
+  window.dispatchEvent(new CustomEvent('grimorio:rolechange', { detail: { isMaster } }));
   renderAll();
   toast('✦ Bem-vindo, '+nome+'! Sala: '+code, 3000);
   registarSessao(code);
@@ -2088,14 +2639,33 @@ function renderStrikes(p,editable){
   } else if(qr){ qr.style.display='none'; }
 }
 
-// Adiciona strikes acumulativos sem exigir descrição de ferimento
+// Adiciona strikes acumulativos — cura usa entradas especiais rastreáveis
 function quickStrike(delta){
   const p = targetOrWarn(); if(!p) return;
   const before = p.totalStrikes||0;
   p.totalStrikes = Math.max(0, before + delta);
+  if(delta > 0){
+    // Registar como ferimento anónimo para manter consistência com removeWound
+    p.wounds = p.wounds || [];
+    p.wounds.push({ qty: delta, desc: 'Strike rápido' });
+    toast('✕ +'+delta+' strike(s) — total '+p.totalStrikes);
+  } else if(delta < 0){
+    // Curar: remover os últimos ferimentos anónimos até cobrir o delta
+    let restante = Math.abs(delta);
+    p.wounds = p.wounds || [];
+    for(let i = p.wounds.length - 1; i >= 0 && restante > 0; i--){
+      const w = p.wounds[i];
+      if((w.qty||0) <= restante){
+        restante -= (w.qty||0);
+        p.wounds.splice(i, 1);
+      } else {
+        w.qty -= restante;
+        restante = 0;
+      }
+    }
+    toast('✦ '+Math.abs(delta)+' strike(s) curado(s) — total '+p.totalStrikes);
+  }
   renderStrikes(p, true); schSave();
-  if(delta>0) toast('✕ +'+delta+' strike(s) — total '+p.totalStrikes);
-  else        toast('✦ '+Math.abs(delta)+' strike(s) curado(s) — total '+p.totalStrikes);
 }
 
 function addWound(){
@@ -2239,6 +2809,14 @@ function renderSkills(p,editable){
           ?`<button class="roll-btn" id="rb-${sk.id}" onclick="rollSkill('${sk.id}')">Rolar ${sk.level}d6</button>`
           :'<span style="font-family:\'Cinzel\',serif;font-size:10px;color:rgba(201,149,42,.25);letter-spacing:1px;">somente leitura</span>'}
         <span class="skill-result r-norm" id="sr-${sk.id}"></span>
+      </div>
+      <div style="font-size:10px;color:rgba(201,149,42,.28);margin-top:4px;font-style:italic;">
+        ${sk.id==='fazer-algo'
+          ? '1 seis = nova perícia'
+          : max
+            ? '✦ Nível máximo atingido'
+            : sk.level+' seis = avança para '+LVL_LBL[sk.level+1]
+        }
       </div>`;
     list.appendChild(card);
     // Restaurar faces dos dados e resultado do último lançamento
@@ -2321,10 +2899,15 @@ function finalizeRoll(id, preCalcRes){
     schSave(); return;
   }
   if(sixes>=sk.level&&sk.level<5){
+    const oldLevel = sk.level;
     sk.level=Math.min(5,sk.level+1);
-    sr.className='skill-result r-crit'; sr.textContent='✦✦ '+sk.name+' → '+LVL_LBL[sk.level];
+    sr.className='skill-result r-crit'; sr.textContent='✦'.repeat(oldLevel)+' '+sk.name+' → '+LVL_LBL[sk.level];
     $('mup-name').textContent=sk.name;
-    $('mup-txt').textContent=sk.name+' avança para '+LVL_LBL[sk.level]+'! Você rola '+sk.level+'d6.';
+    $('mup-txt').textContent=sk.name+' avança para '+LVL_LBL[sk.level]+'! Você rola '+sk.level+'d6 — precisa de '+sk.level+' seis para subir novamente.';
+    // Título e estrelas dinâmicos: 2 seis = "Duplo Crítico", 3 = "Triplo Crítico", etc.
+    const nomes = ['','Crítico','Duplo Crítico','Triplo Crítico','Quádruplo Crítico'];
+    $('mup-title').textContent = (nomes[oldLevel] || oldLevel+' Críticos') + '!';
+    $('mup-stars').textContent = '✦'.repeat(oldLevel);
     $('modal-up').classList.remove('hidden');
     sk.lastRollResults=res; sk.lastResult=sr.textContent; sk.lastResultClass=sr.className;
     postRollToChat(sk.name, res, sr.textContent, sr.className);
@@ -2732,10 +3315,22 @@ function importarFicha(evt){
       if(Array.isArray(dados.ferimentos))   p.wounds       = dados.ferimentos;
       if(typeof dados.sorte === 'number')   p.luck         = dados.sorte;
       if(Array.isArray(dados.pericias)){
-        p.skills = dados.pericias;
-        // Garantir fazer-algo sempre Nível I após importação
-        const fa = p.skills.find(s=>s.id==='fazer-algo');
-        if(fa) fa.level = 1;
+        // FIX #5: validar cada perícia individualmente antes de importar
+        const validSkill = (s) => s && typeof s === 'object' && typeof s.name === 'string' && s.name.length > 0;
+        const skills = dados.pericias.filter(validSkill).map(s => ({
+          id:      (typeof s.id === 'string' && s.id) ? s.id : s.name.toLowerCase().replace(/\s+/g,'_')+'_imp',
+          name:    String(s.name).slice(0, 30),
+          level:   Math.min(5, Math.max(1, parseInt(s.level)||1)),
+          rolling: false,
+          modifier:typeof s.modifier === 'number' ? s.modifier : 0,
+          lastRollResults: Array.isArray(s.lastRollResults) ? s.lastRollResults : undefined,
+          lastResult:      typeof s.lastResult === 'string' ? s.lastResult : undefined,
+          lastResultClass: typeof s.lastResultClass === 'string' ? s.lastResultClass : undefined,
+        }));
+        // Garantir fazer-algo sempre Nível I
+        const fa = skills.find(s => s.id === 'fazer-algo');
+        if(fa){ fa.level = 1; } else { skills.unshift({id:'fazer-algo',name:'Fazer Algo',level:1,rolling:false}); }
+        p.skills = skills;
       }
       if(Array.isArray(dados.mochila))      p.bag          = dados.mochila;
       renderAll();
@@ -2793,12 +3388,20 @@ function reconectarSala(code){
   // #9: limpar estado da sessão actual antes de reconectar
   detachListener();
   salaId = ''; viewId = ''; isMaster = false; players = {};
-  masterUID = '';
+  masterUID = ''; dirtyUntil = {};
   var b = document.getElementById('btn-encerrar'); if(b) b.classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('lobby').classList.remove('hidden');
   document.getElementById('lobby').style.display = 'flex';
   document.getElementById('l-code').value = code;
+  // FIX #2: auto-fill name from saved ficha on reconnect
+  try {
+    const ficha = JSON.parse(localStorage.getItem('grimorio_ficha') || 'null');
+    const nameInp = document.getElementById('l-name');
+    if(ficha && (ficha.charName || ficha.name) && nameInp && !nameInp.value){
+      nameInp.value = ficha.charName || ficha.name;
+    }
+  } catch(e){}
   toast('Sala ' + code + ' carregada. Clica em Entrar.', 3000);
 }
 
@@ -2816,11 +3419,12 @@ function sairDaSala(){
   if(!confirm('Sair da sala? Os teus dados ficam guardados.')) return;
   detachListener();
   // NÃO remove o jogador do Firebase — dados ficam até a sessão ser encerrada pelo Mestre
-  salaId = ''; viewId = myId; isMaster = false; players = {};
+  salaId = ''; viewId = myId; isMaster = false; players = {}; masterUID = ''; dirtyUntil = {};
   var b = document.getElementById('btn-encerrar'); if(b) b.classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('lobby').classList.remove('hidden');
   document.getElementById('lobby').style.display = 'flex';
+  if(typeof window._unmountVTT === 'function') window._unmountVTT();
   toast('Saiste da sala.', 2000);
 }
 
@@ -2873,11 +3477,12 @@ async function encerrarSessao(){
     toast('Erro ao encerrar sessão.', 3000);
   }
   detachListener();
-  salaId = ''; viewId = myId; isMaster = false; players = {};
+  salaId = ''; viewId = myId; isMaster = false; players = {}; masterUID = ''; dirtyUntil = {};
   var b = document.getElementById('btn-encerrar'); if(b) b.classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('lobby').classList.remove('hidden');
   document.getElementById('lobby').style.display = 'flex';
+  if(typeof window._unmountVTT === 'function') window._unmountVTT();
 }
 
 /* ═══════════════════════════════
@@ -2919,14 +3524,32 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ═══════════════════════════════════════════════════
-   CHAT GLOBAL DE DADOS
+   CHAT GLOBAL DE DADOS + TEXTO
 ═══════════════════════════════════════════════════ */
 let chatListener      = null;
 let chatSettListener  = null;
 let chatOpen          = false;
 let chatUnread        = 0;
-let chatVisible       = true;   // controlado pelo mestre
-let chatRenderedIds   = new Set(); // evitar duplicar msgs
+let chatVisible       = true;
+let chatRenderedIds   = new Set();
+let chatActiveTab     = 'all'; // 'all' | 'rolls' | 'msgs'
+
+/* ── Abas ── */
+function switchChatTab(tab){
+  chatActiveTab = tab;
+  document.querySelectorAll('.chat-tab-btn').forEach(b => b.classList.remove('active'));
+  const btn = $('chat-tab-'+tab);
+  if(btn) btn.classList.add('active');
+  // Refiltrar mensagens visíveis
+  const entries = $('chat-msgs') ? $('chat-msgs').querySelectorAll('.chat-entry') : [];
+  entries.forEach(el => {
+    const isRoll = el.dataset.msgtype === 'roll';
+    const isMsg  = el.dataset.msgtype === 'text';
+    if(tab === 'all')   el.style.display = '';
+    else if(tab === 'rolls') el.style.display = isRoll ? '' : 'none';
+    else if(tab === 'msgs')  el.style.display = isMsg  ? '' : 'none';
+  });
+}
 
 /* Abrir / Fechar painel */
 function toggleChat(){
@@ -2937,6 +3560,7 @@ function toggleChat(){
     chatUnread = 0;
     updateChatBadge();
     scrollChatToBottom();
+    setTimeout(()=>{ const inp=$('chat-text-inp'); if(inp) inp.focus(); }, 150);
   }
 }
 
@@ -2956,7 +3580,6 @@ function scrollChatToBottom(){
   if(el) el.scrollTop = el.scrollHeight;
 }
 
-/* Mostrar o FAB quando entrar numa sala */
 function showChatFab(){
   const fab = $('chat-fab');
   if(fab) fab.style.display = 'flex';
@@ -2978,24 +3601,73 @@ function setChatVisibility(visible){
 
 function updateChatVisUI(visible){
   chatVisible = visible;
-  // Actualizar toggle do mestre
   const tog = $('chat-vis-toggle');
   if(tog) tog.checked = visible;
-  // Mostrar/esconder aviso para jogadores
   const notice  = $('chat-hidden-notice');
   const msgs    = $('chat-msgs');
+  const inputArea = $('chat-input-area');
+  const hint    = $('chat-shortcut-hint');
   if(!isMaster){
     if(notice) notice.classList.toggle('show', !visible);
     if(msgs)   msgs.style.display = visible ? 'flex' : 'none';
+    if(inputArea) inputArea.style.display = visible ? 'flex' : 'none';
+    if(hint) hint.style.display = visible ? 'block' : 'none';
   }
 }
 
-/* Publicar uma rolagem no chat (Firebase) */
+/* ── Enviar mensagem de texto via input ── */
+function sendChatMessage(){
+  const inp = $('chat-text-inp');
+  if(!inp) return;
+  const raw = inp.value.trim();
+  if(!raw) return;
+  inp.value = '';
+
+  // Detectar comando /r
+  if(raw.startsWith('/r ') || raw.startsWith('/roll ')){
+    const skillQuery = raw.replace(/^\/(r|roll)\s+/i,'').trim();
+    parseChatRollCommand(skillQuery);
+    return;
+  }
+  postTextToChat(raw);
+}
+
+/* ── Interpretar comando de rolagem ── */
+function parseChatRollCommand(query){
+  if(isMaster){ toast('Mestre não pode rolar perícias.'); return; }
+  const p = me();
+  const skills = p.skills || [];
+  const match = skills.find(s => s.name.toLowerCase() === query.toLowerCase())
+             || skills.find(s => s.name.toLowerCase().includes(query.toLowerCase()));
+  if(!match){
+    toast('Perícia "'+query+'" não encontrada na tua ficha!', 2800);
+    return;
+  }
+  rollSkill(match.id);
+}
+
+/* ── Publicar mensagem de texto no Firebase ── */
+function postTextToChat(text){
+  if(!firebaseOK || !salaId) return;
+  const p = me();
+  const displayName = p.charName || p.name || (isMaster ? 'Mestre' : 'Aventureiro');
+  const msg = {
+    type       : 'text',
+    playerName : displayName,
+    playerId   : myId,
+    text       : String(text).slice(0, 200),
+    ts         : Date.now()
+  };
+  db.ref('salas/'+salaId+'/chat').push(msg);
+}
+
+/* ── Publicar rolagem no chat (Firebase) ── */
 function postRollToChat(skillName, diceResults, resultText, resultClass){
   if(!firebaseOK || !salaId) return;
   const p = me();
   const displayName = p.charName || p.name || 'Aventureiro';
   const msg = {
+    type       : 'roll',
     playerName : displayName,
     playerId   : myId,
     skillName  : skillName,
@@ -3007,7 +3679,7 @@ function postRollToChat(skillName, diceResults, resultText, resultClass){
   db.ref('salas/'+salaId+'/chat').push(msg);
 }
 
-/* Renderizar uma única entrada no chat */
+/* ── Renderizar uma entrada no chat ── */
 function renderChatEntry(msgId, msg){
   if(chatRenderedIds.has(msgId)) return;
   chatRenderedIds.add(msgId);
@@ -3015,34 +3687,45 @@ function renderChatEntry(msgId, msg){
   const empty = $('chat-empty');
   if(empty) empty.style.display = 'none';
 
-  const best = Math.max(...(msg.dice||[1]));
-  const entryClass = msg.resultClass === 'r-crit'
-    ? 'entry-crit'
-    : msg.resultClass === 'r-good'
-    ? 'entry-good' : '';
-
-  const diceHTML = (msg.dice||[]).map(d=>{
-    const cls = d === 6 ? 'die-crit' : d === best ? 'die-hi' : '';
-    return `<div class="chat-die ${cls}">${d}</div>`;
-  }).join('');
-
-  const time = new Date(msg.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-
+  const time = new Date(msg.ts||Date.now()).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   const el = document.createElement('div');
-  el.className = 'chat-entry ' + entryClass;
-  el.innerHTML = `
-    <div class="chat-entry-top">
-      <span class="chat-player-name">${esc(msg.playerName)}</span>
-      <span class="chat-entry-time">${time}</span>
-    </div>
-    <div class="chat-skill-name">${esc(msg.skillName)}</div>
-    <div class="chat-dice-row">${diceHTML}</div>
-    <div class="chat-result ${msg.resultClass||'r-norm'}">${esc(msg.resultText)}</div>`;
+  el.dataset.msgtype = msg.type || 'roll';
+
+  // Filtro por aba ativa
+  if(chatActiveTab === 'rolls' && msg.type === 'text') el.style.display = 'none';
+  if(chatActiveTab === 'msgs'  && msg.type !== 'text') el.style.display = 'none';
+
+  if(msg.type === 'text'){
+    el.className = 'chat-entry entry-msg';
+    el.innerHTML = `
+      <div class="chat-entry-top">
+        <span class="chat-player-name">${esc(msg.playerName||'?')}</span>
+        <span class="chat-entry-time">${time}</span>
+      </div>
+      <div class="chat-msg-body">${esc(msg.text||'')}</div>`;
+  } else {
+    // roll (legacy ou tipo explícito)
+    const best = Math.max(...(msg.dice||[1]));
+    const entryClass = msg.resultClass === 'r-crit' ? 'entry-crit'
+                     : msg.resultClass === 'r-good' ? 'entry-good' : '';
+    const diceHTML = (msg.dice||[]).map(d=>{
+      const cls = d === 6 ? 'die-crit' : d === best ? 'die-hi' : '';
+      return `<div class="chat-die ${cls}">${d}</div>`;
+    }).join('');
+    el.className = 'chat-entry ' + entryClass;
+    el.innerHTML = `
+      <div class="chat-entry-top">
+        <span class="chat-player-name">${esc(msg.playerName||'?')}</span>
+        <span class="chat-entry-time">${time}</span>
+      </div>
+      <div class="chat-skill-name">${esc(msg.skillName||'')}</div>
+      <div class="chat-dice-row">${diceHTML}</div>
+      <div class="chat-result ${msg.resultClass||'r-norm'}">${esc(msg.resultText||'')}</div>`;
+  }
 
   const msgs = $('chat-msgs');
   if(msgs){
     msgs.appendChild(el);
-    // Incrementar unread se painel fechado
     if(!chatOpen){
       chatUnread++;
       updateChatBadge();
@@ -3052,13 +3735,26 @@ function renderChatEntry(msgId, msg){
   }
 }
 
+/* ── Postar mensagem de sistema (tracker, handouts) ── */
+function postSystemMsg(text){
+  if(!firebaseOK || !salaId) return;
+  const msg = {
+    type: 'text',
+    playerName: '⚙ Sistema',
+    playerId: 'system',
+    text: text,
+    ts: Date.now()
+  };
+  db.ref('salas/'+salaId+'/chat').push(msg);
+}
+
 /* Limpar chat ao entrar numa sala */
 function clearChat(){
   chatRenderedIds.clear();
   chatUnread = 0;
   updateChatBadge();
   const msgs = $('chat-msgs');
-  if(msgs) msgs.innerHTML = '<p class="chat-empty" id="chat-empty">Nenhuma rolagem ainda...</p>';
+  if(msgs) msgs.innerHTML = '<p class="chat-empty" id="chat-empty">Silêncio na taverna...</p>';
   const notice = $('chat-hidden-notice');
   if(notice) notice.classList.remove('show');
 }
@@ -3068,32 +3764,28 @@ function attachChatListener(){
   if(!firebaseOK || !salaId) return;
   clearChat();
 
-  // Listener de visibilidade
   chatSettListener = db.ref('salas/'+salaId+'/chatSettings/visible').on('value', snap => {
     const v = snap.exists() ? snap.val() : true;
     updateChatVisUI(v);
   });
 
-  // Mostrar barra de controlo ao Mestre
   const masterBar = $('chat-master-bar');
   if(masterBar) masterBar.classList.toggle('show', isMaster);
 
-  // Se mestre: criar setting padrão (visível) se não existir
   if(isMaster){
     db.ref('salas/'+salaId+'/chatSettings/visible').once('value').then(s=>{
       if(!s.exists()) db.ref('salas/'+salaId+'/chatSettings/visible').set(true);
     });
   }
 
-  // Listener de mensagens — últimas 60
-  const chatRef = db.ref('salas/'+salaId+'/chat').limitToLast(60);
+  const chatRef = db.ref('salas/'+salaId+'/chat').limitToLast(80);
   chatListener = chatRef.on('child_added', snap => {
     const msg = snap.val();
     if(msg) renderChatEntry(snap.key, msg);
   });
 }
 
-/* Desligar listener */
+/* Desligar listener do chat */
 function detachChatListener(){
   if(chatListener && firebaseOK && salaId){
     db.ref('salas/'+salaId+'/chat').off('child_added', chatListener);
@@ -3102,6 +3794,297 @@ function detachChatListener(){
   if(chatSettListener && firebaseOK && salaId){
     db.ref('salas/'+salaId+'/chatSettings/visible').off('value', chatSettListener);
     chatSettListener = null;
+  }
+}
+
+/* ─── Enter key no input de chat ─── */
+document.addEventListener('DOMContentLoaded', ()=>{
+  const cinp = $('chat-text-inp');
+  if(cinp) cinp.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChatMessage(); });
+  const tname = $('tracker-add-name');
+  if(tname) tname.addEventListener('keydown', e=>{ if(e.key==='Enter') addTrackerEntry(); });
+});
+
+/* ═══════════════════════════════════════════════════
+   COMBAT TRACKER — RASTREADOR DE INICIATIVA
+═══════════════════════════════════════════════════ */
+let trackerListener     = null;
+let trackerOpen         = false;
+let trackerState        = { entries:[], currentTurn:-1, round:1 };
+let trackerRendered     = false;
+
+function showTrackerFab(){
+  const fab = $('tracker-fab');
+  if(fab) fab.style.display = 'flex';
+}
+function hideTrackerFab(){
+  const fab = $('tracker-fab');
+  if(fab) fab.style.display = 'none';
+  const panel = $('tracker-panel');
+  if(panel) panel.classList.add('hidden');
+  trackerOpen = false;
+}
+
+function toggleTracker(){
+  trackerOpen = !trackerOpen;
+  const panel = $('tracker-panel');
+  if(!panel) return;
+  panel.classList.toggle('hidden', !trackerOpen);
+  if(trackerOpen) renderTrackerUI();
+}
+
+/* ── Adicionar participante (GM) ── */
+function addTrackerEntry(){
+  if(!isMaster){ toast('Apenas o Mestre pode adicionar participantes.'); return; }
+  const nameInp = $('tracker-add-name');
+  const initInp = $('tracker-add-init');
+  if(!nameInp || !initInp) return;
+  const name = nameInp.value.trim();
+  const init = Math.min(6, Math.max(1, parseInt(initInp.value)||1));
+  if(!name){ toast('Digite um nome!'); return; }
+
+  const entry = { id: genId(), name, initiative: init, hp: 10, maxHp: 10, type:'npc' };
+  const newEntries = [...(trackerState.entries||[]), entry]
+    .sort((a,b) => b.initiative - a.initiative);
+
+  trackerState.entries = newEntries;
+  nameInp.value = '';
+  initInp.value = '1';
+  pushTrackerState();
+}
+
+/* ── Remover participante (GM) ── */
+function removeTrackerEntry(id){
+  if(!isMaster) return;
+  const idx = trackerState.entries.findIndex(e=>e.id===id);
+  if(idx < 0) return;
+  trackerState.entries.splice(idx, 1);
+  // Ajustar turno atual se necessário
+  if(trackerState.currentTurn >= trackerState.entries.length){
+    trackerState.currentTurn = trackerState.entries.length > 0 ? 0 : -1;
+  }
+  pushTrackerState();
+}
+
+/* ── Ajustar HP ── */
+function adjustTrackerHp(id, delta){
+  if(!isMaster) return;
+  const entry = trackerState.entries.find(e=>e.id===id);
+  if(!entry) return;
+  entry.hp = Math.max(0, (entry.hp||0) + delta);
+  pushTrackerState();
+}
+
+/* ── Próximo turno ── */
+function nextTrackerTurn(){
+  if(!isMaster || !trackerState.entries.length) return;
+  let next = trackerState.currentTurn + 1;
+  let newRound = trackerState.round || 1;
+  if(next >= trackerState.entries.length){
+    next = 0;
+    newRound++;
+    trackerState.round = newRound;
+  }
+  trackerState.currentTurn = next;
+  pushTrackerState();
+
+  // Postar no chat
+  const entry = trackerState.entries[next];
+  if(entry){
+    postSystemMsg(`⚔️ Turno de ${entry.name} · Rodada ${trackerState.round}`);
+  }
+}
+
+/* ── Resetar tracker ── */
+function resetTracker(){
+  if(!isMaster) return;
+  if(!confirm('Zerar tracker? Remove todos os participantes e reinicia a rodada.')) return;
+  trackerState = { entries:[], currentTurn:-1, round:1 };
+  pushTrackerState();
+  postSystemMsg('⚔️ Tracker de iniciativa reiniciado.');
+}
+
+/* ── Jogador rola iniciativa ── */
+function rollMyInitiative(){
+  if(isMaster){ toast('Mestre não pode rolar iniciativa aqui.'); return; }
+  const p = me();
+  const name = p.charName || p.name || 'Aventureiro';
+  const roll = Math.floor(Math.random()*6)+1;
+  toast('Iniciativa: '+roll, 2000);
+
+  // Verificar se já existe entrada com este nome/id
+  const existing = trackerState.entries.find(e=>e.playerId===myId);
+  if(existing){
+    existing.initiative = roll;
+  } else {
+    trackerState.entries.push({ id: genId(), name, initiative: roll, hp: 10, maxHp: 10, type:'player', playerId: myId });
+  }
+  trackerState.entries.sort((a,b)=>b.initiative - a.initiative);
+  pushTrackerState();
+  postRollToChat('Iniciativa', [roll], 'Iniciativa: '+roll, roll>=5?'r-crit':roll>=3?'r-good':'r-norm');
+}
+
+/* ── Salvar estado no Firebase ── */
+function pushTrackerState(){
+  if(!firebaseOK || !salaId) return;
+  db.ref('salas/'+salaId+'/tracker').set(trackerState)
+    .catch(e=>console.warn('Tracker write error:', e));
+  renderTrackerUI();
+}
+
+/* ── Renderizar UI do tracker ── */
+function renderTrackerUI(){
+  const list    = $('tracker-list');
+  const roundEl = $('tracker-round');
+  const emptyEl = $('tracker-empty');
+  const addRow  = $('tracker-add-row');
+  const rollBar = $('tracker-roll-bar');
+  const btnNext = $('tracker-btn-next');
+  const btnReset= $('tracker-btn-reset');
+
+  if(!list) return;
+
+  if(roundEl) roundEl.textContent = trackerState.round || 1;
+
+  // Mostrar controles GM
+  if(addRow)  addRow.style.display  = isMaster ? 'flex' : 'none';
+  if(btnNext) btnNext.style.display = isMaster ? 'inline-block' : 'none';
+  if(btnReset)btnReset.style.display= isMaster ? 'inline-block' : 'none';
+  // Mostrar botão de rolagem para jogadores
+  if(rollBar) rollBar.style.display = !isMaster ? 'flex' : 'none';
+
+  const entries = trackerState.entries || [];
+  if(!entries.length){
+    list.innerHTML = '<p class="tracker-empty" id="tracker-empty">Nenhum participante ainda.</p>';
+    return;
+  }
+  if(emptyEl) emptyEl.style.display = 'none';
+
+  list.innerHTML = '';
+  entries.forEach((entry, idx)=>{
+    const isActive = idx === trackerState.currentTurn;
+    const div = document.createElement('div');
+    div.className = 'tracker-entry' + (isActive ? ' active-turn' : '');
+    div.innerHTML = `
+      <span class="tracker-entry-turn-arrow">▶</span>
+      <span class="tracker-entry-init">${entry.initiative}</span>
+      <span class="tracker-entry-name">${esc(entry.name)}</span>
+      ${isMaster ? `
+        <button class="tracker-hp-btn" onclick="adjustTrackerHp('${entry.id}',-1)" title="−1 HP">−</button>
+        <span class="tracker-entry-hp">❤ ${entry.hp||0}</span>
+        <button class="tracker-hp-btn" onclick="adjustTrackerHp('${entry.id}',+1)" title="+1 HP">+</button>
+        <button class="tracker-entry-rm" onclick="removeTrackerEntry('${entry.id}')" title="Remover">✕</button>
+      ` : `<span class="tracker-entry-hp">❤ ${entry.hp||0}</span>`}`;
+    list.appendChild(div);
+  });
+}
+
+/* ── Ligar listener do tracker ── */
+function attachTrackerListener(){
+  if(!firebaseOK || !salaId) return;
+  trackerListener = db.ref('salas/'+salaId+'/tracker').on('value', snap => {
+    const data = snap.val();
+    if(data){
+      trackerState = { entries:[], currentTurn:-1, round:1, ...data };
+      // Garantir que entries é array
+      if(!Array.isArray(trackerState.entries)) trackerState.entries = [];
+    } else {
+      trackerState = { entries:[], currentTurn:-1, round:1 };
+    }
+    if(trackerOpen) renderTrackerUI();
+  });
+}
+
+/* ── Desligar listener do tracker ── */
+function detachTrackerListener(){
+  if(trackerListener && firebaseOK && salaId){
+    db.ref('salas/'+salaId+'/tracker').off('value', trackerListener);
+    trackerListener = null;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   HANDOUTS — IMAGENS DO MESTRE
+═══════════════════════════════════════════════════ */
+let handoutListener  = null;
+let handoutLastTs    = 0;
+const MAX_HANDOUT_B64 = 1.5 * 1024 * 1024; // 1.5MB limite
+
+function openHandoutUpload(){
+  if(!isMaster){ toast('Apenas o Mestre pode revelar handouts.'); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*';
+  inp.onchange = (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    if(!file.type.startsWith('image/')){ toast('Apenas imagens são suportadas.'); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const b64 = ev.target.result;
+      if(b64.length > MAX_HANDOUT_B64){
+        toast('Imagem muito grande! Use uma imagem menor que 1MB.', 3000);
+        return;
+      }
+      const title = prompt('Título do handout (opcional):', 'Revelação do Mestre') || 'Revelação do Mestre';
+      publishHandout(b64, title);
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
+}
+
+function publishHandout(src, title){
+  if(!firebaseOK || !salaId || !isMaster) return;
+  const data = { src, title: String(title).slice(0,60), ts: Date.now() };
+  db.ref('salas/'+salaId+'/handout').set(data)
+    .then(()=>{
+      toast('📜 Handout revelado!', 2500);
+      postSystemMsg('📜 O Mestre revelou: '+data.title);
+    })
+    .catch(e=>{ toast('Erro ao publicar handout: '+e.message, 3000); });
+}
+
+function clearHandout(){
+  if(!firebaseOK || !salaId || !isMaster) return;
+  db.ref('salas/'+salaId+'/handout').remove()
+    .then(()=>{ toast('Handout removido.'); closeHandout(); })
+    .catch(e=>{ toast('Erro ao remover handout.'); });
+}
+
+function closeHandout(){
+  const modal = $('handout-modal');
+  if(modal) modal.classList.add('hidden');
+}
+
+function showHandout(data){
+  if(!data || !data.src) return;
+  // Evitar re-abrir o mesmo handout (compara ts)
+  if(data.ts && data.ts === handoutLastTs) return;
+  handoutLastTs = data.ts || 0;
+  const modal    = $('handout-modal');
+  const img      = $('handout-img');
+  const titleTxt = $('handout-title-txt');
+  if(!modal || !img) return;
+  if(titleTxt) titleTxt.textContent = data.title || '📜 Revelação do Mestre';
+  img.src = data.src;
+  modal.classList.remove('hidden');
+}
+
+function attachHandoutListener(){
+  if(!firebaseOK || !salaId) return;
+  handoutListener = db.ref('salas/'+salaId+'/handout').on('value', snap => {
+    const data = snap.val();
+    if(data && data.src){
+      showHandout(data);
+    }
+  });
+}
+
+function detachHandoutListener(){
+  if(handoutListener && firebaseOK && salaId){
+    db.ref('salas/'+salaId+'/handout').off('value', handoutListener);
+    handoutListener = null;
   }
 }
 
@@ -3119,6 +4102,17 @@ const ZOOM_MAX  = 4;
 const ZOOM_STEP = 0.001;
 const GRID_COLOR_DARK = "#c8c8c8";
 const BG_COLOR_DARK   = "#f0f0f0";
+const METERS_PER_CELL = 1.5; // 1 célula = 1.5m
+
+const TERRAIN_COLORS = [
+  { label:"Difícil",  value:"rgba(180,100,20,0.35)",  border:"rgba(180,100,20,0.7)"  },
+  { label:"Água",     value:"rgba(30,100,220,0.30)",   border:"rgba(30,100,220,0.6)"  },
+  { label:"Fogo",     value:"rgba(220,60,20,0.35)",    border:"rgba(220,60,20,0.7)"   },
+  { label:"Veneno",   value:"rgba(80,180,40,0.30)",    border:"rgba(80,180,40,0.6)"   },
+  { label:"Sagrado",  value:"rgba(220,200,40,0.28)",   border:"rgba(220,200,40,0.6)"  },
+  { label:"Sombra",   value:"rgba(80,20,140,0.32)",    border:"rgba(80,20,140,0.6)"   },
+  { label:"Apagar",   value:null, border:null },
+];
 
 const DRAW_COLORS = [
   { label:"Branco",   value:"#ffffff" }, { label:"Vermelho", value:"#e05252" },
@@ -3189,6 +4183,10 @@ function useCamera(containerRef, isPanModeRef, setCursorStyle) {
 
 function useMapImage() {
   const [mapTransform, setMapTransform] = useState(null);
+  // Store original aspect ratio to preserve it on resize
+  const origRatio = useRef(1);
+  const origW     = useRef(MAP_DEFAULT_CELLS);
+
   const loadMap = useCallback((file) => {
     if (!file || !file.type.startsWith("image/")) return;
     const url = URL.createObjectURL(file);
@@ -3196,13 +4194,34 @@ function useMapImage() {
     img.onload = () => {
       const ratio = img.naturalHeight / img.naturalWidth;
       const w = MAP_DEFAULT_CELLS;
-      setMapTransform({ src:url, x:0, y:0, w, h:Math.round(w*ratio) });
+      origRatio.current = ratio;
+      origW.current = w;
+      setMapTransform({ src:url, x:0, y:0, w, h:Math.round(w*ratio), origW:w, origRatio:ratio });
     };
     img.src = url;
   }, []);
+
   const updateMapTransform = useCallback((upd) => setMapTransform((p) => p ? {...p,...upd} : p), []);
+
+  // delta: number of cells to add/subtract, or new absolute w if absolute=true; 0 = reset
+  const resizeMap = useCallback((delta, absolute=false) => {
+    setMapTransform((p) => {
+      if(!p) return p;
+      const ratio = p.origRatio || origRatio.current || 1;
+      let newW;
+      if(delta === 0){
+        newW = p.origW || origW.current || MAP_DEFAULT_CELLS;
+      } else if(absolute){
+        newW = delta;
+      } else {
+        newW = Math.max(5, Math.min(100, p.w + delta));
+      }
+      return { ...p, w: newW, h: Math.round(newW * ratio) };
+    });
+  }, []);
+
   const clearMap = useCallback(() => setMapTransform((p) => { if(p?.src) URL.revokeObjectURL(p.src); return null; }), []);
-  return { mapTransform, loadMap, updateMapTransform, clearMap };
+  return { mapTransform, loadMap, updateMapTransform, resizeMap, clearMap };
 }
 
 function useDrawing() {
@@ -3236,6 +4255,180 @@ function useFog() {
     setFogCells(n);
   }, []);
   return { fogCells, paintFogCells, eraseFogCells, clearFog, fillFog };
+}
+
+// ── usePings: marcadores temporários visíveis ──
+function usePings() {
+  const [pings, setPings] = useState([]);
+  const addPing = useCallback((x, y) => {
+    const id = `ping-${Date.now()}`;
+    setPings(p => [...p, { id, x, y, ts: Date.now() }]);
+    setTimeout(() => setPings(p => p.filter(g => g.id !== id)), 2200);
+  }, []);
+  return { pings, addPing };
+}
+
+// ── useTerrainZones: células coloridas de terreno ──
+function useTerrainZones() {
+  const [zones, setZones] = useState({}); // key "col,row" -> { color, border }
+  const paintZone = useCallback((cells, terrain) => {
+    setZones(p => {
+      const n = { ...p };
+      cells.forEach(([c, r]) => {
+        if(terrain.value === null){ delete n[`${c},${r}`]; }
+        else { n[`${c},${r}`] = terrain; }
+      });
+      return n;
+    });
+  }, []);
+  const clearZones = useCallback(() => setZones({}), []);
+  return { zones, paintZone, clearZones };
+}
+
+// ── useMeasure: régua de distância ──
+function useMeasure() {
+  const [measure, setMeasure] = useState(null); // { x1,y1,x2,y2 } in world coords
+  const startMeasure  = useCallback((x, y) => setMeasure({ x1:x, y1:y, x2:x, y2:y }), []);
+  const updateMeasure = useCallback((x, y) => setMeasure(m => m ? { ...m, x2:x, y2:y } : null), []);
+  const endMeasure    = useCallback(() => setMeasure(null), []);
+  return { measure, startMeasure, updateMeasure, endMeasure };
+}
+
+// ── PingLayer: marcadores pulsantes temporários ──
+function PingLayer({ pings, camera, cellSize }) {
+  return (
+    <div style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", pointerEvents:"none", zIndex:20 }}>
+      {pings.map(pg => {
+        const left = pg.x * cellSize * camera.scale + camera.x;
+        const top  = pg.y * cellSize * camera.scale + camera.y;
+        return (
+          <div key={pg.id} style={{ position:"absolute", left, top, transform:"translate(-50%,-50%)", pointerEvents:"none" }}>
+            <div style={{ width:28, height:28, borderRadius:"50%", border:"3px solid rgba(255,220,40,0.9)", background:"rgba(255,220,40,0.25)", animation:"pingPulse 0.55s ease-out infinite" }} />
+            <div style={{ position:"absolute", inset:6, borderRadius:"50%", background:"rgba(255,220,40,0.7)" }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── TerrainLayer: zonas de terreno colorido ──
+function TerrainLayer({ zones, camera, cellSize, width, height }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const cv = ref.current; if(!cv) return;
+    const ctx = cv.getContext("2d");
+    ctx.clearRect(0, 0, width, height);
+    if(Object.keys(zones).length === 0) return;
+    ctx.save();
+    ctx.translate(camera.x, camera.y);
+    ctx.scale(camera.scale, camera.scale);
+    for(const [key, terrain] of Object.entries(zones)){
+      if(!terrain || !terrain.value) continue;
+      const [col, row] = key.split(",").map(Number);
+      const px = col * cellSize, py = row * cellSize;
+      ctx.fillStyle = terrain.value;
+      ctx.fillRect(px, py, cellSize, cellSize);
+      ctx.strokeStyle = terrain.border || "rgba(255,255,255,0.3)";
+      ctx.lineWidth = 1 / camera.scale;
+      ctx.strokeRect(px + 0.5, py + 0.5, cellSize - 1, cellSize - 1);
+    }
+    ctx.restore();
+  }, [zones, camera, cellSize, width, height]);
+  return <canvas ref={ref} width={width} height={height} style={{ position:"absolute", top:0, left:0, pointerEvents:"none", zIndex:2 }} />;
+}
+
+// ── MeasureLayer: régua de distância ──
+function MeasureLayer({ measure, camera, cellSize, width, height }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const cv = ref.current; if(!cv) return;
+    const ctx = cv.getContext("2d");
+    ctx.clearRect(0, 0, width, height);
+    if(!measure) return;
+    const toScreen = (wx, wy) => ({
+      sx: wx * cellSize * camera.scale + camera.x,
+      sy: wy * cellSize * camera.scale + camera.y,
+    });
+    const s1 = toScreen(measure.x1, measure.y1);
+    const s2 = toScreen(measure.x2, measure.y2);
+    const dx = measure.x2 - measure.x1, dy = measure.y2 - measure.y1;
+    const cells = Math.sqrt(dx*dx + dy*dy);
+    const meters = (cells * METERS_PER_CELL).toFixed(1);
+
+    ctx.save();
+    // linha
+    ctx.beginPath();
+    ctx.moveTo(s1.sx, s1.sy);
+    ctx.lineTo(s2.sx, s2.sy);
+    ctx.strokeStyle = "rgba(255,220,40,0.85)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // pontos
+    [s1, s2].forEach(pt => {
+      ctx.beginPath();
+      ctx.arc(pt.sx, pt.sy, 5, 0, Math.PI*2);
+      ctx.fillStyle = "rgba(255,220,40,0.9)";
+      ctx.fill();
+    });
+    // label
+    const mx = (s1.sx + s2.sx) / 2, my = (s1.sy + s2.sy) / 2;
+    const label = `${cells.toFixed(1)}c · ${meters}m`;
+    ctx.font = "bold 13px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = "rgba(20,20,20,0.75)";
+    ctx.beginPath();
+    ctx.roundRect(mx - tw/2 - 6, my - 11, tw + 12, 22, 4);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,220,40,1)";
+    ctx.fillText(label, mx, my);
+    ctx.restore();
+  }, [measure, camera, cellSize, width, height]);
+  return <canvas ref={ref} width={width} height={height} style={{ position:"absolute", top:0, left:0, pointerEvents:"none", zIndex:22 }} />;
+}
+
+// ── MeasureCanvas: captura input para medir ──
+function MeasureCanvas({ camera, cellSize, width, height, onStart, onUpdate, onEnd }) {
+  const active = useRef(false);
+  const toWorld = (e, rect) => ({
+    wx: (e.clientX - rect.left - camera.x) / camera.scale / cellSize,
+    wy: (e.clientY - rect.top  - camera.y) / camera.scale / cellSize,
+  });
+  return (
+    <canvas width={width} height={height} style={{ position:"absolute", top:0, left:0, cursor:"crosshair", zIndex:21 }}
+      onMouseDown={e => { active.current=true; const r=e.currentTarget.getBoundingClientRect(); const {wx,wy}=toWorld(e,r); onStart(wx,wy); }}
+      onMouseMove={e => { if(!active.current)return; const r=e.currentTarget.getBoundingClientRect(); const {wx,wy}=toWorld(e,r); onUpdate(wx,wy); }}
+      onMouseUp={() => { active.current=false; onEnd(); }}
+      onMouseLeave={() => { active.current=false; onEnd(); }} />
+  );
+}
+
+// ── TerrainPaintCanvas ──
+function TerrainPaintCanvas({ camera, cellSize, width, height, terrainBrushCells, activeTerrain, onPaint }) {
+  const painting = useRef(false);
+  const lastCell = useRef(null);
+  const toCell = (e, rect) => ({
+    col: Math.floor((e.clientX - rect.left - camera.x) / camera.scale / cellSize),
+    row: Math.floor((e.clientY - rect.top  - camera.y) / camera.scale / cellSize),
+  });
+  const brush = (col, row) => {
+    const cells = [], h = Math.floor(terrainBrushCells / 2);
+    for(let dc=0; dc<terrainBrushCells; dc++)
+      for(let dr=0; dr<terrainBrushCells; dr++)
+        cells.push([col - h + dc, row - h + dr]);
+    return cells;
+  };
+  return (
+    <canvas width={width} height={height} style={{ position:"absolute", top:0, left:0, cursor:"cell", zIndex:8 }}
+      onMouseDown={e => { painting.current=true; const r=e.currentTarget.getBoundingClientRect(); const c=toCell(e,r); lastCell.current=c; onPaint(brush(c.col,c.row)); }}
+      onMouseMove={e => { if(!painting.current)return; const r=e.currentTarget.getBoundingClientRect(); const c=toCell(e,r); if(lastCell.current?.col===c.col&&lastCell.current?.row===c.row)return; lastCell.current=c; onPaint(brush(c.col,c.row)); }}
+      onMouseUp={() => painting.current=false}
+      onMouseLeave={() => painting.current=false} />
+  );
 }
 
 // ── GridLines ──
@@ -3850,7 +5043,7 @@ const secS = { background:"rgba(30,30,30,0.92)", border:"1px solid rgba(255,255,
 const lblS = { fontSize:10, color:"rgba(200,190,180,0.8)", textTransform:"uppercase", letterSpacing:"0.08em", userSelect:"none" };
 
 // ── GMToolbox ──
-function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken }) {
+function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, mapW, onMapResize, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken, activeTerrain, setActiveTerrain, terrainBrushCells, setTerrainBrushCells, onClearZones }) {
   const fileRef = useRef(null);
   const tbtn = (id) => ({
     onClick:()=>setActiveTool(id),
@@ -3874,6 +5067,9 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
           <button {...tbtn("select")}>↖ Mover</button>
           <button {...tbtn("draw")}>✏ Caneta</button>
           <button {...tbtn("fog")}>🌫 Névoa</button>
+          <button {...tbtn("terrain")}>🎨 Terreno</button>
+          <button {...tbtn("measure")}>📏 Medir</button>
+          <button {...tbtn("ping")}>📍 Ping</button>
         </div>
       </div>
       {/* Mapa */}
@@ -3884,6 +5080,20 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
           {hasMap && <button {...abtn(onMapClear,true)}>🗑 Remover</button>}
           <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={(e)=>{ onMapUpload(e.target.files[0]); e.target.value=""; }} />
         </div>
+        {hasMap && (
+          <div style={{ display:"flex", flexDirection:"column", gap:4, marginTop:4 }}>
+            <span style={{ ...lblS, marginTop:2 }}>Tamanho (células)</span>
+            <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+              <button onClick={()=>onMapResize(-5)} style={{ width:26,height:26,borderRadius:5,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(30,30,30,0.75)",color:"#e0ddd8",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}>−</button>
+              <span style={{ fontSize:11, color:"rgba(201,149,42,0.7)", minWidth:32, textAlign:"center", fontFamily:"monospace" }}>{mapW}c</span>
+              <button onClick={()=>onMapResize(5)} style={{ width:26,height:26,borderRadius:5,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(30,30,30,0.75)",color:"#e0ddd8",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}>+</button>
+              <button onClick={()=>onMapResize(0)} title="Resetar tamanho original" style={{ padding:"3px 8px",borderRadius:5,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(30,30,30,0.75)",color:"rgba(200,190,180,0.6)",cursor:"pointer",fontSize:10 }}>⌂</button>
+            </div>
+            <input type="range" min={5} max={100} step={1} value={mapW} onChange={(e)=>onMapResize(parseInt(e.target.value), true)}
+              style={{ width:"100%", accentColor:"#c9952a", cursor:"pointer" }} />
+            <span style={{ fontSize:10, color:"rgba(201,149,42,0.45)", fontStyle:"italic" }}>Proporção preservada · Mover: arrastar</span>
+          </div>
+        )}
         {!hasMap && <span style={{ fontSize:11, color:"rgba(201,149,42,0.5)", fontStyle:"italic" }}>Arraste o mapa para posicionar</span>}
       </div>
       {/* Caneta */}
@@ -3949,6 +5159,85 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
           <button onClick={onAddToken} style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>🎭 Adicionar Token</button>
         </div>
       </div>
+      {/* Handouts */}
+      <div style={{ ...secS, borderColor:"rgba(201,149,42,0.3)", background:"rgba(30,20,5,0.75)" }}>
+        <span style={{ ...lblS, color:"rgba(201,149,42,0.7)" }}>📜 Handouts</span>
+        <div style={{ fontSize:11, color:"rgba(200,180,100,0.7)", lineHeight:1.6, marginBottom:2 }}>
+          Revela imagens para todos<br/>os jogadores em tempo real.
+        </div>
+        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+          <button onClick={()=>typeof openHandoutUpload==='function'&&openHandoutUpload()}
+            style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(201,149,42,0.4)", background:"rgba(201,149,42,0.1)", color:"#e8c840", cursor:"pointer", fontSize:12 }}>
+            📂 Revelar Imagem
+          </button>
+          <button onClick={()=>typeof clearHandout==='function'&&clearHandout()}
+            style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(220,60,40,0.35)", background:"rgba(180,40,20,0.2)", color:"#f0a090", cursor:"pointer", fontSize:12 }}>
+            🗑 Remover
+          </button>
+        </div>
+      </div>
+      {/* Terreno */}
+      {activeTool==="terrain" && <>
+        <div style={{ ...secS, borderColor:"rgba(140,100,30,0.4)", background:"rgba(50,35,10,0.65)" }}>
+          <span style={{ ...lblS, color:"rgba(220,180,80,0.85)" }}>Zonas de Terreno</span>
+          <div style={{ fontSize:11, color:"rgba(200,170,100,0.8)", lineHeight:1.6 }}>
+            <div>🖱️ <b>Esquerdo</b>: pintar zona</div>
+            <div style={{ opacity:0.65, marginTop:2 }}>Escolha o tipo abaixo</div>
+          </div>
+        </div>
+        <div style={secS}>
+          <span style={lblS}>Tipo de Terreno</span>
+          <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+            {TERRAIN_COLORS.map((t,i) => (
+              <button key={i} onClick={()=>setActiveTerrain(t)}
+                style={{ padding:"4px 10px", borderRadius:5, cursor:"pointer", fontSize:11, textAlign:"left",
+                  border:`1px solid ${activeTerrain===t ? "rgba(255,220,40,0.7)" : (t.border||"rgba(255,255,255,0.12)")}`,
+                  background: activeTerrain===t ? "rgba(255,220,40,0.12)" : (t.value || "rgba(60,20,20,0.5)"),
+                  color: t.value===null ? "#f08080" : "#e0ddd8" }}>
+                {t.value===null ? "✕ Apagar zona" : t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={secS}>
+          <span style={lblS}>Pincel (células)</span>
+          <div style={{ display:"flex", gap:4 }}>
+            {[1,2,3,5].map(n => (
+              <button key={n} onClick={()=>setTerrainBrushCells(n)}
+                style={{ width:32,height:28,borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:600,
+                  background:terrainBrushCells===n?"rgba(140,100,20,0.5)":"rgba(30,30,30,0.75)",
+                  border:terrainBrushCells===n?"1px solid rgba(220,180,40,0.8)":"1px solid rgba(255,255,255,0.12)",
+                  color:terrainBrushCells===n?"#e8c840":"#9a9690" }}>
+                {n}×{n}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={secS}>
+          <span style={lblS}>Ações</span>
+          <button {...abtn(onClearZones,true)}>🗑 Limpar terreno</button>
+        </div>
+      </>}
+      {/* Medir */}
+      {activeTool==="measure" && (
+        <div style={{ ...secS, borderColor:"rgba(255,220,40,0.3)", background:"rgba(50,45,10,0.65)" }}>
+          <span style={{ ...lblS, color:"rgba(255,220,40,0.85)" }}>Régua de Distância</span>
+          <div style={{ fontSize:11, color:"rgba(220,200,100,0.8)", lineHeight:1.8 }}>
+            <div>🖱️ <b>Clicar e arrastar</b>: medir</div>
+            <div>1 célula = <b style={{color:"rgba(255,220,40,0.9)"}}>{METERS_PER_CELL}m</b></div>
+          </div>
+        </div>
+      )}
+      {/* Ping */}
+      {activeTool==="ping" && (
+        <div style={{ ...secS, borderColor:"rgba(255,220,40,0.3)", background:"rgba(50,45,10,0.65)" }}>
+          <span style={{ ...lblS, color:"rgba(255,220,40,0.85)" }}>Marcador de Ping</span>
+          <div style={{ fontSize:11, color:"rgba(220,200,100,0.8)", lineHeight:1.8 }}>
+            <div>🖱️ <b>Clicar</b> no mapa</div>
+            <div style={{ opacity:0.65 }}>Desaparece após 2s</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3985,6 +5274,8 @@ function useKeyboard(isPanMode, setIsPanMode, permissions, setActiveTool, undoLa
         if(e.code==="KeyV") setActiveTool("select");
         if(e.code==="KeyP") setActiveTool("draw");
         if(e.code==="KeyF") setActiveTool("fog");
+        if(e.code==="KeyT") setActiveTool("terrain");
+        if(e.code==="KeyM") setActiveTool("measure");
       }
     };
     const ku=(e)=>{ if(e.code==="Space") setIsPanMode(false); };
@@ -4014,11 +5305,16 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
 
   const permissions = useRole(role);
   const { camera, setCamera, isPanning, cameraHandlers } = useCamera(containerRef, isPanModeRef, setCursorStyle);
-  const { mapTransform, loadMap, updateMapTransform, clearMap } = useMapImage();
+  const { mapTransform, loadMap, updateMapTransform, resizeMap, clearMap } = useMapImage();
   const { paths, startPath, extendPath, endPath, undoLast, clearAll } = useDrawing();
   const { fogCells, paintFogCells, eraseFogCells, clearFog, fillFog } = useFog();
   const { tokens, addToken, updateToken, removeToken } = useTokens();
+  const { pings, addPing } = usePings();
+  const { zones, paintZone, clearZones } = useTerrainZones();
+  const { measure, startMeasure, updateMeasure, endMeasure } = useMeasure();
   const [showTokenModal, setShowTokenModal] = useState(false);
+  const [activeTerrain, setActiveTerrain] = useState(TERRAIN_COLORS[0]);
+  const [terrainBrushCells, setTerrainBrushCells] = useState(1);
 
   useKeyboard(isPanMode, setIsPanModeSync, permissions, setActiveTool, undoLast);
 
@@ -4035,8 +5331,9 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
   }, []);
 
   const handleMouseDown = useCallback((e) => {
-    const capturing = permissions.canEdit && (activeTool==="draw"||activeTool==="fog") && e.button===0 && !isPanMode;
+    const capturing = permissions.canEdit && (activeTool==="draw"||activeTool==="fog"||activeTool==="terrain"||activeTool==="measure") && e.button===0 && !isPanMode;
     if(capturing) return;
+    if(permissions.canEdit && activeTool==="ping" && e.button===0 && !isPanMode) return;
     cameraHandlers.onMouseDown(e);
   }, [isPanMode, activeTool, permissions.canEdit, cameraHandlers]);
 
@@ -4044,8 +5341,10 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
     cameraHandlers.onMouseUp(e);
     if (isPanMode) {
       setCursorStyle("grab");
-    } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog")) {
+    } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog" || activeTool === "terrain")) {
       setCursorStyle("none");
+    } else if (permissions.canEdit && (activeTool === "measure" || activeTool === "ping")) {
+      setCursorStyle("crosshair");
     } else {
       setCursorStyle("default");
     }
@@ -4053,9 +5352,17 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
 
   const handleClick = useCallback((e) => {
     if(isPanMode||isPanning.current) return;
-    if(permissions.canEdit&&(activeTool==="draw"||activeTool==="fog")) return;
+    if(permissions.canEdit && activeTool==="ping"){
+      const rect = containerRef.current?.getBoundingClientRect();
+      if(!rect) return;
+      const wx = (e.clientX - rect.left - camera.x) / camera.scale / cellSize;
+      const wy = (e.clientY - rect.top  - camera.y) / camera.scale / cellSize;
+      addPing(wx, wy);
+      return;
+    }
+    if(permissions.canEdit&&(activeTool==="draw"||activeTool==="fog"||activeTool==="terrain"||activeTool==="measure")) return;
     if(!permissions.canEdit){ setShowRO(true); setTimeout(()=>setShowRO(false),1800); }
-  }, [permissions.canEdit, activeTool, isPanMode, isPanning]);
+  }, [permissions.canEdit, activeTool, isPanMode, isPanning, camera, cellSize, addPing]);
 
   const handleFillFog = useCallback(() => {
     const cols = mapTransform ? Math.ceil(mapTransform.x+mapTransform.w+5) : 40;
@@ -4067,8 +5374,10 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
     if (isPanning.current) return;
     if (isPanMode) {
       setCursorStyle("grab");
-    } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog")) {
+    } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog" || activeTool === "terrain")) {
       setCursorStyle("none");
+    } else if (permissions.canEdit && (activeTool === "measure" || activeTool === "ping")) {
+      setCursorStyle("crosshair");
     } else {
       setCursorStyle("default");
     }
@@ -4088,6 +5397,8 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
       onMouseLeave={stopPan}
     >
       <GridLines camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
+
+      <TerrainLayer zones={zones} camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
 
       <div style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:15 }}>
         <RulerLayer camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
@@ -4117,6 +5428,20 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
           fogBrushCells={fogBrushCells} onPaint={paintFogCells} onErase={eraseFogCells} />
       )}
 
+      {permissions.canEdit && activeTool==="terrain" && !isPanMode && (
+        <TerrainPaintCanvas camera={camera} cellSize={cellSize} width={size.width} height={size.height}
+          terrainBrushCells={terrainBrushCells} activeTerrain={activeTerrain}
+          onPaint={(cells) => paintZone(cells, activeTerrain)} />
+      )}
+
+      {permissions.canEdit && activeTool==="measure" && !isPanMode && (
+        <MeasureCanvas camera={camera} cellSize={cellSize} width={size.width} height={size.height}
+          onStart={startMeasure} onUpdate={updateMeasure} onEnd={endMeasure} />
+      )}
+
+      <MeasureLayer measure={measure} camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
+      <PingLayer pings={pings} camera={camera} cellSize={cellSize} />
+
       <RoleBadge role={role} />
       <CameraControls camera={camera} setCamera={setCamera} />
 
@@ -4127,9 +5452,13 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
           brushSize={brushSize}         setBrushSize={setBrushSize}
           fogBrushCells={fogBrushCells} setFogBrushCells={setFogBrushCells}
           onMapUpload={loadMap}         onMapClear={clearMap}         hasMap={!!mapTransform}
+          mapW={mapTransform ? mapTransform.w : MAP_DEFAULT_CELLS}   onMapResize={resizeMap}
           onUndoDraw={undoLast}         onClearDraw={clearAll}
           onClearFog={clearFog}         onFillFog={handleFillFog}
-          onAddToken={()=>setShowTokenModal(true)} />
+          onAddToken={()=>setShowTokenModal(true)}
+          activeTerrain={activeTerrain} setActiveTerrain={setActiveTerrain}
+          terrainBrushCells={terrainBrushCells} setTerrainBrushCells={setTerrainBrushCells}
+          onClearZones={clearZones} />
       )}
 
       {showTokenModal && permissions.canEdit && (
@@ -4150,6 +5479,27 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
         </div>
       )}
 
+      {/* Indicador de terreno */}
+      {permissions.canEdit && activeTool==="terrain" && !isPanMode && (
+        <div style={{ position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",background:"rgba(50,35,10,0.88)",color:"#e8c840",padding:"4px 14px",borderRadius:6,fontSize:12,pointerEvents:"none",zIndex:30,border:"1px solid rgba(220,180,40,0.4)" }}>
+          🎨 Terreno: {activeTerrain.value===null ? "Apagar" : activeTerrain.label} — clique para pintar
+        </div>
+      )}
+
+      {/* Indicador de medição */}
+      {permissions.canEdit && activeTool==="measure" && !isPanMode && (
+        <div style={{ position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",background:"rgba(50,45,10,0.88)",color:"#ffe040",padding:"4px 14px",borderRadius:6,fontSize:12,pointerEvents:"none",zIndex:30,border:"1px solid rgba(255,220,40,0.4)" }}>
+          📏 Medir — clique e arraste
+        </div>
+      )}
+
+      {/* Indicador de ping */}
+      {permissions.canEdit && activeTool==="ping" && !isPanMode && (
+        <div style={{ position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",background:"rgba(50,45,10,0.88)",color:"#ffe040",padding:"4px 14px",borderRadius:6,fontSize:12,pointerEvents:"none",zIndex:30,border:"1px solid rgba(255,220,40,0.4)" }}>
+          📍 Ping — clique para marcar
+        </div>
+      )}
+
       {/* Read-only flash */}
       {showRO && (
         <div style={{ position:"absolute",bottom:56,left:"50%",transform:"translateX(-50%)",background:"rgba(180,60,30,0.88)",color:"#fff",padding:"6px 18px",borderRadius:8,fontSize:13,pointerEvents:"none",zIndex:20 }}>
@@ -4159,23 +5509,20 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
 
       {/* Legenda atalhos (canto inferior direito) */}
       <div style={{ position:"absolute",bottom:16,right:16,fontSize:10,color:"rgba(0,0,0,0.25)",lineHeight:1.7,textAlign:"right",pointerEvents:"none",zIndex:10,userSelect:"none" }}>
-        {permissions.canEdit && <><div>V · Mover &nbsp; P · Caneta &nbsp; F · Névoa</div><div>Espaço · Pan &nbsp; Ctrl+Z · Desfazer</div></>}
+        {permissions.canEdit && <><div>V · Mover &nbsp; P · Caneta &nbsp; F · Névoa &nbsp; T · Terreno &nbsp; M · Medir</div><div>Espaço · Pan &nbsp; Ctrl+Z · Desfazer</div></>}
         <div>Scroll · Zoom &nbsp; Botão do meio · Pan</div>
       </div>
     </div>
   );
 }
 
-// ── VTTApp: detecta papel do grimório ──
+// ── VTTApp: detecta papel do grimório via CustomEvent ──
 function VTTApp() {
   const [role, setRole] = useState(() => typeof window.isMaster!=="undefined" ? (window.isMaster?"GM":"PLAYER") : "PLAYER");
   useEffect(() => {
-    const t = setInterval(()=>{
-      if(typeof window.isMaster!=="undefined"){
-        setRole(window.isMaster?"GM":"PLAYER");
-      }
-    }, 1500);
-    return ()=>clearInterval(t);
+    const handler = (e) => setRole(e.detail.isMaster ? "GM" : "PLAYER");
+    window.addEventListener("grimorio:rolechange", handler);
+    return () => window.removeEventListener("grimorio:rolechange", handler);
   }, []);
 
   useEffect(() => {
@@ -4190,13 +5537,20 @@ function VTTApp() {
 
 // ── Mount (lazy, chamado pelo showTab do grimório) ──
 let _mounted = false;
+let _vttRoot = null;
 window._mountVTT = function() {
-  if(_mounted) return;
   const root = document.getElementById("vtt-root");
   if(!root) return;
-  _mounted = true;
-  ReactDOM.createRoot(root).render(<VTTApp />);
+  if(!_mounted){
+    _mounted = true;
+    _vttRoot = ReactDOM.createRoot(root);
+  }
+  _vttRoot.render(<VTTApp />);
   setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
+};
+window._unmountVTT = function() {
+  if(_vttRoot){ _vttRoot.render(null); }
+  _mounted = false;
 };
 
 })();
