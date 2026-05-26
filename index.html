@@ -5652,7 +5652,19 @@ function HandoutGridLayer({ handoutData, onClose }) {
 // ── VTTApp: detecta papel do grimório via CustomEvent ──
 function VTTApp() {
   const [role, setRole] = useState(() => {
-    if (typeof window.isMaster !== "undefined") return window.isMaster ? "GM" : "PLAYER";
+    // 1. Verifica se isMaster está explicitamente definido
+    if (typeof window.isMaster !== "undefined" && window.isMaster) return "GM";
+    
+    // 2. Verifica se o usuário atual é o dono da sala (Room Owner)
+    // No sistema do Grimório, o criador da sala geralmente tem seu ID comparado com o dono da sala
+    const currentUserId = window.userId || (window.currentUser && window.currentUser.id);
+    const roomOwnerId = window.roomOwnerId || (window.currentRoom && window.currentRoom.ownerId);
+    
+    if (currentUserId && roomOwnerId && currentUserId === roomOwnerId) {
+      console.log("User identified as Room Owner. Granting GM role.");
+      return "GM";
+    }
+
     return "PLAYER";
   });
   const [activeTool, setActiveTool] = useState("select");
@@ -5669,13 +5681,17 @@ function VTTApp() {
       console.log("GM Mode forced to:", v);
     };
     
-    // Fallback: Se window.isMaster for true mas o role ainda for PLAYER, corrige após 500ms
+    // Fallback: Verifica múltiplas condições para garantir o papel de GM
     const timer = setTimeout(() => {
-      if (window.isMaster && role !== "GM") {
-        console.log("Forcing GM role via window.isMaster fallback");
+      const currentUserId = window.userId || (window.currentUser && window.currentUser.id);
+      const roomOwnerId = window.roomOwnerId || (window.currentRoom && window.currentRoom.ownerId);
+      const isOwner = currentUserId && roomOwnerId && currentUserId === roomOwnerId;
+
+      if ((window.isMaster || isOwner) && role !== "GM") {
+        console.log("Forcing GM role via fallback (isMaster or isOwner)");
         setRole("GM");
       }
-    }, 500);
+    }, 1000);
 
     return () => {
       window.removeEventListener("grimorio:rolechange", handler);
@@ -5769,6 +5785,29 @@ function VTTApp() {
         activeTool={activeTool} 
         setActiveTool={setActiveTool} 
       />
+      
+      {/* Botão de emergência caso a detecção de GM falhe */}
+      {role !== "GM" && (
+        <button 
+          onClick={() => window.forceGM(true)}
+          style={{
+            position: "fixed",
+            top: "10px",
+            right: "80px",
+            zIndex: 999999,
+            background: "rgba(0,0,0,0.3)",
+            color: "rgba(255,255,255,0.2)",
+            border: "none",
+            borderRadius: "4px",
+            padding: "2px 6px",
+            fontSize: "9px",
+            cursor: "pointer"
+          }}
+          title="Clique aqui se você for o Mestre e os controles não aparecerem"
+        >
+          ATIVAR GM
+        </button>
+      )}
     </div>
   );
 }
