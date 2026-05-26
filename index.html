@@ -5325,7 +5325,7 @@ function useKeyboard(isPanMode, setIsPanMode, permissions, setActiveTool, undoLa
 }
 
 // ── VTTGrid principal ──
-function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
+function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select", setActiveTool }) {
   const containerRef = useRef(null);
   const [size, setSize]         = useState({ width:800, height:600 });
   const [showRO, setShowRO]     = useState(false);
@@ -5335,8 +5335,6 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
     isPanModeRef.current = v;
     setIsPanMode(v);
   }, []);
-
-  const [activeTool, setActiveTool] = useState("select");
   const [brushColor, setBrushColor] = useState(DRAW_COLORS[0].value);
   const [brushSize,  setBrushSize]  = useState(BRUSH_SIZES[1]);
   const [fogBrushCells, setFogBrushCells] = useState(FOG_BRUSH_CELLS[0]);
@@ -5654,6 +5652,7 @@ function HandoutGridLayer({ handoutData, onClose }) {
 // ── VTTApp: detecta papel do grimório via CustomEvent ──
 function VTTApp() {
   const [role, setRole] = useState(() => typeof window.isMaster!=="undefined" ? (window.isMaster?"GM":"PLAYER") : "PLAYER");
+  const [activeTool, setActiveTool] = useState("select");
   useEffect(() => {
     const handler = (e) => setRole(e.detail.isMaster ? "GM" : "PLAYER");
     window.addEventListener("grimorio:rolechange", handler);
@@ -5667,7 +5666,79 @@ function VTTApp() {
     document.documentElement.style.setProperty('--vtt-top', top + 'px');
   }, []);
 
-  return <VTTGrid role={role} cellSize={40} />;
+  return (
+    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+      {role === "GM" && (
+        <div style={{ 
+          position: "absolute", 
+          bottom: 20, 
+          left: "50%", 
+          transform: "translateX(-50%)", 
+          zIndex: 100, 
+          display: "flex", 
+          gap: 10, 
+          background: "rgba(20,15,10,0.95)", 
+          padding: "10px 20px", 
+          borderRadius: "12px", 
+          border: "1px solid rgba(201,149,42,0.6)", 
+          boxShadow: "0 8px 32px rgba(0,0,0,0.8)",
+          backdropFilter: "blur(4px)"
+        }}>
+          <button 
+            onClick={() => setActiveTool("select")} 
+            style={{ 
+              background: activeTool === "select" ? "linear-gradient(135deg, #c9952a, #a67c21)" : "rgba(30,30,30,0.6)", 
+              color: activeTool === "select" ? "#fff" : "#c9952a", 
+              border: "1px solid #c9952a", 
+              padding: "6px 16px", 
+              borderRadius: "6px", 
+              cursor: "pointer", 
+              fontSize: "13px", 
+              fontWeight: "bold", 
+              transition: "all 0.2s",
+              fontFamily: "Cinzel, serif",
+              letterSpacing: "0.05em"
+            }}>↖ MOVER</button>
+          <button 
+            onClick={() => setActiveTool("draw")} 
+            style={{ 
+              background: activeTool === "draw" ? "linear-gradient(135deg, #c9952a, #a67c21)" : "rgba(30,30,30,0.6)", 
+              color: activeTool === "draw" ? "#fff" : "#c9952a", 
+              border: "1px solid #c9952a", 
+              padding: "6px 16px", 
+              borderRadius: "6px", 
+              cursor: "pointer", 
+              fontSize: "13px", 
+              fontWeight: "bold", 
+              transition: "all 0.2s",
+              fontFamily: "Cinzel, serif",
+              letterSpacing: "0.05em"
+            }}>✏ CANETA</button>
+          <button 
+            onClick={() => setActiveTool("fog")} 
+            style={{ 
+              background: activeTool === "fog" ? "linear-gradient(135deg, #c9952a, #a67c21)" : "rgba(30,30,30,0.6)", 
+              color: activeTool === "fog" ? "#fff" : "#c9952a", 
+              border: "1px solid #c9952a", 
+              padding: "6px 16px", 
+              borderRadius: "6px", 
+              cursor: "pointer", 
+              fontSize: "13px", 
+              fontWeight: "bold", 
+              transition: "all 0.2s",
+              fontFamily: "Cinzel, serif",
+              letterSpacing: "0.05em"
+            }}>🌫 NÉVOA</button>
+        </div>
+      )}
+      <VTTGrid 
+        role={role} 
+        cellSize={40} 
+        activeTool={activeTool} 
+        setActiveTool={setActiveTool} 
+      />
+    </div>
+  );
 }
 
 // ── Mount (lazy, chamado pelo showTab do grimório) ──
