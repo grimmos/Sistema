@@ -5283,7 +5283,7 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
 
 function RoleBadge({ role }) {
   const gm = role==="GM" || window.debugGM;
-  return <div style={{ position:"absolute",top:12,right:12,padding:"4px 12px",borderRadius:20,fontSize:12,fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",background:gm?"#7f4b2e":"#1a5c42",color:gm?"#f5d6c0":"#a8ebd0",border:`1px solid ${gm?"#a0603a":"#2d8a62"}`,pointerEvents:"none",zIndex:99999,userSelect:"none" }}>{gm?"⚔ Mestre":"🎲 Jogador"}</div>;
+  return <div style={{ position:"absolute",top:12,right:12,padding:"4px 12px",borderRadius:20,fontSize:12,fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",background:gm?"#7f4b2e":"#1a5c42",color:gm?"#f5d6c0":"#a8ebd0",border:`1px solid ${gm?"#a0603a":"#2d8a62"}`,pointerEvents:"none",zIndex:10,userSelect:"none" }}>{gm?"⚔ Mestre":"🎲 Jogador"}</div>;
 }
 
 function CameraControls({ camera, setCamera }) {
@@ -5651,55 +5651,27 @@ function HandoutGridLayer({ handoutData, onClose }) {
 
 // ── VTTApp: detecta papel do grimório via CustomEvent ──
 function VTTApp() {
-  const [role, setRole] = useState("PLAYER");
+  const [role, setRole] = useState(() => (window.isMaster || window.debugGM) ? "GM" : "PLAYER");
   const [activeTool, setActiveTool] = useState("select");
   
-  // Detecção inicial e contínua
   useEffect(() => {
-    const checkRole = () => {
-      const isMaster = !!window.isMaster;
-      const currentUserId = window.userId || (window.currentUser && window.currentUser.id);
-      const roomOwnerId = window.roomOwnerId || (window.currentRoom && window.currentRoom.ownerId);
-      const isOwner = !!(currentUserId && roomOwnerId && currentUserId === roomOwnerId);
-      
-      if ((isMaster || isOwner || window.debugGM) && role !== "GM") {
-        setRole("GM");
-      }
+    const check = () => {
+      const gm = !!(window.isMaster || window.debugGM);
+      if (gm && role !== "GM") setRole("GM");
+      else if (!gm && role === "GM") setRole("PLAYER");
     };
     
-    checkRole();
-    const interval = setInterval(checkRole, 1000);
-    return () => clearInterval(interval);
-  }, [role]);
-  
-  useEffect(() => {
-    const handler = (e) => {
-      console.log("Role change event received:", e.detail);
-      setRole(e.detail.isMaster ? "GM" : "PLAYER");
-    };
-    window.addEventListener("grimorio:rolechange", handler);
-    window.forceGM = (v) => { 
-      window.debugGM = v; 
-      setRole(v ? "GM" : "PLAYER"); 
-      console.log("GM Mode forced to:", v);
-    };
-    
-    // Fallback: Verifica múltiplas condições para garantir o papel de GM
-    const timer = setTimeout(() => {
-      const currentUserId = window.userId || (window.currentUser && window.currentUser.id);
-      const roomOwnerId = window.roomOwnerId || (window.currentRoom && window.currentRoom.ownerId);
-      const isOwner = currentUserId && roomOwnerId && currentUserId === roomOwnerId;
-
-      if ((window.isMaster || isOwner) && role !== "GM") {
-        console.log("Forcing GM role via fallback (isMaster or isOwner)");
-        setRole("GM");
+    window.forceGM = (v) => { window.debugGM = v; check(); };
+    window.addEventListener("grimorio:rolechange", (e) => {
+      if (e.detail && typeof e.detail.isMaster !== "undefined") {
+        window.isMaster = e.detail.isMaster;
+        check();
       }
-    }, 1000);
+    });
 
-    return () => {
-      window.removeEventListener("grimorio:rolechange", handler);
-      clearTimeout(timer);
-    };
+    const timer = setInterval(check, 1000);
+    check();
+    return () => clearInterval(timer);
   }, [role]);
 
   useEffect(() => {
@@ -5719,80 +5691,90 @@ function VTTApp() {
     }}>
       <div style={{ 
         position: "fixed", 
-        top: "10px", 
-        left: "120px", 
+        top: "52px", // Botão Sair está em top:12px + ~34px de altura = 46px. 52px dá um respiro.
+        left: "12px", 
         zIndex: 999999, 
         display: "flex", 
-        gap: "10px", 
-        alignItems: "center" 
+        flexDirection: "column",
+        gap: "6px", 
+        alignItems: "flex-start" 
       }}>
-        {role !== "GM" && !window.debugGM ? (
+        {role !== "GM" ? (
           <button 
             onClick={() => { window.forceGM(true); }}
             style={{
-              background: "rgba(201,149,42,0.15)",
-              color: "#c9952a",
-              border: "1px solid #c9952a",
+              background: "rgba(201,149,42,0.9)",
+              color: "#000",
+              border: "1px solid #000",
               borderRadius: "4px",
-              padding: "5px 12px",
+              padding: "6px 12px",
               fontSize: "11px",
               fontWeight: "bold",
               cursor: "pointer",
               fontFamily: "Cinzel, serif",
-              backdropFilter: "blur(4px)"
+              boxShadow: "0 4px 15px rgba(0,0,0,0.6)"
             }}
           >
-            ATIVAR MODO MESTRE ⚔
+            ⚔ ATIVAR MODO MESTRE
           </button>
         ) : (
           <div style={{ 
             display: "flex", 
-            gap: "6px", 
-            background: "rgba(20,15,10,0.9)", 
-            padding: "4px 8px", 
+            flexDirection: "column",
+            gap: "4px", 
+            background: "rgba(20,15,10,0.95)", 
+            padding: "8px", 
             borderRadius: "8px", 
-            border: "1px solid #c9952a",
-            backdropFilter: "blur(4px)"
+            border: "2px solid #c9952a",
+            backdropFilter: "blur(6px)",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.8)"
           }}>
+            <div style={{ color: "#c9952a", fontSize: "9px", fontWeight: "bold", textAlign: "center", marginBottom: "4px", borderBottom: "1px solid rgba(201,149,42,0.3)" }}>FERRAMENTAS GM</div>
             <button 
               onClick={() => setActiveTool("select")} 
               style={{ 
-                background: activeTool === "select" ? "#c9952a" : "transparent", 
-                color: activeTool === "select" ? "#000" : "#c9952a", 
-                border: "none", 
-                padding: "4px 10px", 
+                background: activeTool === "select" ? "#c9952a" : "rgba(255,255,255,0.05)", 
+                color: activeTool === "select" ? "#000" : "#e0ddd8", 
+                border: "1px solid rgba(201,149,42,0.4)", 
+                padding: "6px 12px", 
                 borderRadius: "4px", 
                 cursor: "pointer", 
-                fontSize: "11px", 
+                fontSize: "10px", 
                 fontWeight: "bold",
+                textAlign: "left",
+                width: "100%",
                 fontFamily: "Cinzel, serif"
-              }}>MOVER</button>
+              }}>↖ MOVER</button>
             <button 
               onClick={() => setActiveTool("draw")} 
               style={{ 
-                background: activeTool === "draw" ? "#c9952a" : "transparent", 
-                color: activeTool === "draw" ? "#000" : "#c9952a", 
-                border: "none", 
-                padding: "4px 10px", 
+                background: activeTool === "draw" ? "#c9952a" : "rgba(255,255,255,0.05)", 
+                color: activeTool === "draw" ? "#000" : "#e0ddd8", 
+                border: "1px solid rgba(201,149,42,0.4)", 
+                padding: "6px 12px", 
                 borderRadius: "4px", 
                 cursor: "pointer", 
-                fontSize: "11px", 
+                fontSize: "10px", 
                 fontWeight: "bold",
+                textAlign: "left",
+                width: "100%",
                 fontFamily: "Cinzel, serif"
-              }}>CANETA</button>
+              }}>✏ CANETA</button>
             <button 
               onClick={() => setActiveTool("fog")} 
               style={{ 
-                background: activeTool === "fog" ? "#c9952a" : "transparent", 
-                color: activeTool === "fog" ? "#000" : "#c9952a", 
-                border: "none", 
-                padding: "4px 10px", 
+                background: activeTool === "fog" ? "#c9952a" : "rgba(255,255,255,0.05)", 
+                color: activeTool === "fog" ? "#000" : "#e0ddd8", 
+                border: "1px solid rgba(201,149,42,0.4)", 
+                padding: "6px 12px", 
                 borderRadius: "4px", 
                 cursor: "pointer", 
-                fontSize: "11px", 
+                fontSize: "10px", 
                 fontWeight: "bold",
+                textAlign: "left",
+                width: "100%",
                 fontFamily: "Cinzel, serif"
-              }}>NÉVOA</button>
+              }}>🌫 NÉVOA</button>
           </div>
         )}
       </div>
