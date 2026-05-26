@@ -4903,7 +4903,7 @@ function TokenLayer({ tokens, camera, cellSize, isGM, onUpdate, onRemove, active
   });
 
   const onTokenDown = useCallback((e, tok) => {
-    if (!isGM || activeTool !== "select") return;
+    if (!(isGM || window.debugGM) || activeTool !== "select") return;
     e.stopPropagation();
     e.preventDefault();
     setSelected(tok.id);
@@ -5282,8 +5282,8 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
 }
 
 function RoleBadge({ role }) {
-  const gm = role==="GM";
-  return <div style={{ position:"absolute",top:12,right:12,padding:"4px 12px",borderRadius:20,fontSize:12,fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",background:gm?"#7f4b2e":"#1a5c42",color:gm?"#f5d6c0":"#a8ebd0",border:`1px solid ${gm?"#a0603a":"#2d8a62"}`,pointerEvents:"none",zIndex:10,userSelect:"none" }}>{gm?"⚔ Mestre":"🎲 Jogador"}</div>;
+  const gm = role==="GM" || window.debugGM;
+  return <div style={{ position:"absolute",top:12,right:12,padding:"4px 12px",borderRadius:20,fontSize:12,fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",background:gm?"#7f4b2e":"#1a5c42",color:gm?"#f5d6c0":"#a8ebd0",border:`1px solid ${gm?"#a0603a":"#2d8a62"}`,pointerEvents:"none",zIndex:99999,userSelect:"none" }}>{gm?"⚔ Mestre":"🎲 Jogador"}</div>;
 }
 
 function CameraControls({ camera, setCamera }) {
@@ -5440,39 +5440,39 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select
 
       <div style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:15 }}>
         <RulerLayer camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
-        <RulerGMLayer camera={camera} cellSize={cellSize} width={size.width} height={size.height} isGM={permissions.isGM} />
+        <RulerGMLayer camera={camera} cellSize={cellSize} width={size.width} height={size.height} isGM={permissions.isGM || window.debugGM} />
       </div>
 
       <svg style={{ position:"absolute",top:0,left:0,width:size.width,height:size.height,overflow:"visible",pointerEvents: (activeTool === "select") ? "auto" : "none",zIndex:1 }}>
         <g transform={wt} style={{ pointerEvents: (activeTool === "select") ? "auto" : "none" }} data-layer="world">
-          <MapImageLayer mapTransform={mapTransform} cellSize={cellSize} cameraScale={camera.scale} canEdit={permissions.canEdit} onUpdate={updateMapTransform} />
+          <MapImageLayer mapTransform={mapTransform} cellSize={cellSize} cameraScale={camera.scale} canEdit={permissions.canEdit || window.debugGM} onUpdate={updateMapTransform} />
         </g>
       </svg>
 
       <DrawingLayer paths={paths} camera={camera} width={size.width} height={size.height} />
 
-      {permissions.canDraw && activeTool==="draw" && !isPanMode && (
+      {(permissions.canDraw || window.debugGM) && activeTool==="draw" && !isPanMode && (
         <DrawingCanvas camera={camera} width={size.width} height={size.height}
           brushColor={brushColor} brushSize={brushSize}
           onStart={startPath} onExtend={extendPath} onEnd={endPath} />
       )}
 
-      <FogLayer fogCells={fogCells} camera={camera} cellSize={cellSize} width={size.width} height={size.height} isGM={permissions.isGM} />
+      <FogLayer fogCells={fogCells} camera={camera} cellSize={cellSize} width={size.width} height={size.height} isGM={permissions.isGM || window.debugGM} />
 
-      <TokenLayer tokens={tokens} camera={camera} cellSize={cellSize} isGM={permissions.isGM} onUpdate={updateToken} onRemove={removeToken} activeTool={activeTool} />
+      <TokenLayer tokens={tokens} camera={camera} cellSize={cellSize} isGM={permissions.isGM || window.debugGM} onUpdate={updateToken} onRemove={removeToken} activeTool={activeTool} />
 
-      {permissions.canFog && activeTool==="fog" && !isPanMode && (
+      {(permissions.canFog || window.debugGM) && activeTool==="fog" && !isPanMode && (
         <FogPaintCanvas camera={camera} cellSize={cellSize} width={size.width} height={size.height}
           fogBrushCells={fogBrushCells} onPaint={paintFogCells} onErase={eraseFogCells} />
       )}
 
-      {permissions.canEdit && activeTool==="terrain" && !isPanMode && (
+      {(permissions.canEdit || window.debugGM) && activeTool==="terrain" && !isPanMode && (
         <TerrainPaintCanvas camera={camera} cellSize={cellSize} width={size.width} height={size.height}
           terrainBrushCells={terrainBrushCells} activeTerrain={activeTerrain}
           onPaint={(cells) => paintZone(cells, activeTerrain)} />
       )}
 
-      {permissions.canEdit && activeTool==="measure" && !isPanMode && (
+      {(permissions.canEdit || window.debugGM) && activeTool==="measure" && !isPanMode && (
         <MeasureCanvas camera={camera} cellSize={cellSize} width={size.width} height={size.height}
           onStart={startMeasure} onUpdate={updateMeasure} onEnd={endMeasure} />
       )}
@@ -5485,7 +5485,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select
       <RoleBadge role={role} />
       <CameraControls camera={camera} setCamera={setCamera} />
 
-      {permissions.canEdit && (
+      {(permissions.canEdit || window.debugGM) && (
         <GMToolbox
           activeTool={activeTool}       setActiveTool={setActiveTool}
           brushColor={brushColor}       setBrushColor={setBrushColor}
@@ -5501,7 +5501,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select
           onClearZones={clearZones} />
       )}
 
-      {showTokenModal && permissions.canEdit && (
+      {showTokenModal && (permissions.canEdit || window.debugGM) && (
         <AddTokenModal onAdd={addToken} onClose={()=>setShowTokenModal(false)} />
       )}
 
@@ -5651,13 +5651,37 @@ function HandoutGridLayer({ handoutData, onClose }) {
 
 // ── VTTApp: detecta papel do grimório via CustomEvent ──
 function VTTApp() {
-  const [role, setRole] = useState(() => typeof window.isMaster!=="undefined" ? (window.isMaster?"GM":"PLAYER") : "PLAYER");
+  const [role, setRole] = useState(() => {
+    if (typeof window.isMaster !== "undefined") return window.isMaster ? "GM" : "PLAYER";
+    return "PLAYER";
+  });
   const [activeTool, setActiveTool] = useState("select");
+  
   useEffect(() => {
-    const handler = (e) => setRole(e.detail.isMaster ? "GM" : "PLAYER");
+    const handler = (e) => {
+      console.log("Role change event received:", e.detail);
+      setRole(e.detail.isMaster ? "GM" : "PLAYER");
+    };
     window.addEventListener("grimorio:rolechange", handler);
-    return () => window.removeEventListener("grimorio:rolechange", handler);
-  }, []);
+    window.forceGM = (v) => { 
+      window.debugGM = v; 
+      setRole(v ? "GM" : "PLAYER"); 
+      console.log("GM Mode forced to:", v);
+    };
+    
+    // Fallback: Se window.isMaster for true mas o role ainda for PLAYER, corrige após 500ms
+    const timer = setTimeout(() => {
+      if (window.isMaster && role !== "GM") {
+        console.log("Forcing GM role via window.isMaster fallback");
+        setRole("GM");
+      }
+    }, 500);
+
+    return () => {
+      window.removeEventListener("grimorio:rolechange", handler);
+      clearTimeout(timer);
+    };
+  }, [role]);
 
   useEffect(() => {
     const nav = document.getElementById('main-nav');
@@ -5667,23 +5691,31 @@ function VTTApp() {
   }, []);
 
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative" }}>
-      {role === "GM" && (
+    <div style={{ 
+      width: "100vw", 
+      height: "calc(100vh - var(--vtt-top, 0px))", 
+      position: "relative",
+      overflow: "hidden",
+      background: "#000"
+    }}>
+      {(role === "GM" || window.debugGM) && (
         <div style={{ 
-          position: "absolute", 
-          bottom: 20, 
+          position: "fixed", 
+          bottom: "30px", 
           left: "50%", 
           transform: "translateX(-50%)", 
-          zIndex: 100, 
+          zIndex: 999999, 
           display: "flex", 
-          gap: 10, 
-          background: "rgba(20,15,10,0.95)", 
-          padding: "10px 20px", 
-          borderRadius: "12px", 
-          border: "1px solid rgba(201,149,42,0.6)", 
-          boxShadow: "0 8px 32px rgba(0,0,0,0.8)",
-          backdropFilter: "blur(4px)"
+          gap: "12px", 
+          background: "#1a1610", 
+          padding: "12px 24px", 
+          borderRadius: "14px", 
+          border: "2px solid #c9952a", 
+          boxShadow: "0 10px 40px rgba(0,0,0,0.9)",
+          backdropFilter: "blur(8px)",
+          alignItems: "center"
         }}>
+          <div style={{ color: "#c9952a", fontSize: "11px", fontWeight: "bold", fontFamily: "Cinzel, serif", marginRight: "8px", borderRight: "1px solid rgba(201,149,42,0.3)", paddingRight: "12px" }}>CONTROLE DO MESTRE</div>
           <button 
             onClick={() => setActiveTool("select")} 
             style={{ 
