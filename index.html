@@ -4162,9 +4162,9 @@ function useCamera(containerRef, isPanModeRef, setCursorStyle) {
     return () => el.removeEventListener("wheel", handler);
   }, [containerRef]);
 
-  const onMouseDown = useCallback((e) => {
-    if (e.button === 1 || isPanModeRef.current) {
-      e.preventDefault();
+  const onMouseDown = useCallback((e, forcePan = false) => {
+    if (e.button === 1 || isPanModeRef.current || forcePan) {
+      if (e.preventDefault) e.preventDefault();
       isPanning.current = true;
       lastMouse.current = { x:e.clientX, y:e.clientY };
       setCursorStyle("grabbing");
@@ -5104,7 +5104,8 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
       <div style={secS}>
         <span style={lblS}>Ferramenta</span>
         <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-          <button {...tbtn("select")}>↖ Mover</button>
+          <button {...tbtn("pan")}>✋ Mover Mapa</button>
+          <button {...tbtn("select")}>↖ Tokens</button>
           <button {...tbtn("draw")}>✏ Caneta</button>
           <button {...tbtn("fog")}>🌫 Névoa</button>
           <button {...tbtn("terrain")}>🎨 Terreno</button>
@@ -5369,6 +5370,10 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select
   }, []);
 
   const handleMouseDown = useCallback((e) => {
+    if (activeTool === "pan" && e.button === 0) {
+      cameraHandlers.onMouseDown(e, true);
+      return;
+    }
     const capturing = permissions.canEdit && (activeTool==="draw"||activeTool==="fog"||activeTool==="terrain"||activeTool==="measure") && e.button===0 && !isPanMode;
     if(capturing) return;
     if(permissions.canEdit && activeTool==="ping" && e.button===0 && !isPanMode) return;
@@ -5410,7 +5415,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select
 
   useEffect(() => {
     if (isPanning.current) return;
-    if (isPanMode) {
+    if (isPanMode || activeTool === "pan") {
       setCursorStyle("grab");
     } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog" || activeTool === "terrain")) {
       setCursorStyle("none");
@@ -5433,6 +5438,9 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select
       onMouseMove={cameraHandlers.onMouseMove}
       onMouseUp={stopPan}
       onMouseLeave={stopPan}
+      onTouchStart={(e) => { if(e.touches.length === 1) { handleMouseDown({ button: 0, clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, preventDefault: () => e.preventDefault() }); } }}
+      onTouchMove={(e) => { if(e.touches.length === 1) { cameraHandlers.onMouseMove({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }); } }}
+      onTouchEnd={(e) => stopPan(e)}
     >
       <GridLines camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
 
@@ -5652,7 +5660,7 @@ function HandoutGridLayer({ handoutData, onClose }) {
 // ── VTTApp: detecta papel do grimório via CustomEvent ──
 function VTTApp() {
   const [role, setRole] = useState(() => (window.isMaster || window.debugGM) ? "GM" : "PLAYER");
-  const [activeTool, setActiveTool] = useState("select");
+  const [activeTool, setActiveTool] = useState("pan");
   
   useEffect(() => {
     const check = () => {
@@ -5686,39 +5694,7 @@ function VTTApp() {
           }}>⚔ ATIVAR MODO MESTRE</button>
         )}
         
-        {role === "GM" && (
-          <div style={{ 
-            display: "flex", flexDirection: "column", gap: "4px", background: "rgba(20,15,10,0.98)", 
-            padding: "10px", borderRadius: "8px", border: "2px solid #c9952a",
-            backdropFilter: "blur(8px)", boxShadow: "0 6px 25px rgba(0,0,0,0.9)"
-          }}>
-            <div style={{ color: "#c9952a", fontSize: "10px", fontWeight: "bold", textAlign: "center", marginBottom: "6px", borderBottom: "1px solid rgba(201,149,42,0.4)" }}>FERRAMENTAS GM</div>
-            <button onClick={() => setActiveTool("select")} style={{ 
-              background: activeTool === "select" ? "#c9952a" : "rgba(255,255,255,0.05)", 
-              color: activeTool === "select" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
-              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
-              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
-            }}>↖ MOVER</button>
-            <button onClick={() => setActiveTool("draw")} style={{ 
-              background: activeTool === "draw" ? "#c9952a" : "rgba(255,255,255,0.05)", 
-              color: activeTool === "draw" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
-              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
-              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
-            }}>✏ CANETA</button>
-            <button onClick={() => setActiveTool("fog")} style={{ 
-              background: activeTool === "fog" ? "#c9952a" : "rgba(255,255,255,0.05)", 
-              color: activeTool === "fog" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
-              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
-              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
-            }}>🌫 NÉVOA</button>
-            <button onClick={() => setActiveTool("terrain")} style={{ 
-              background: activeTool === "terrain" ? "#c9952a" : "rgba(255,255,255,0.05)", 
-              color: activeTool === "terrain" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
-              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
-              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
-            }}>🎨 TERRENO</button>
-          </div>
-        )}
+        {/* O bloco de FERRAMENTAS GM duplicado foi removido para evitar sobreposição */}
       </div>
             <VTTGrid 
         role={role} 
