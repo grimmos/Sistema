@@ -5694,7 +5694,45 @@ function VTTApp() {
           }}>⚔ ATIVAR MODO MESTRE</button>
         )}
         
-        {/* O bloco de FERRAMENTAS GM duplicado foi removido para evitar sobreposição */}
+        {role === "GM" && (
+          <div style={{ 
+            display: "flex", flexDirection: "column", gap: "4px", background: "rgba(20,15,10,0.98)", 
+            padding: "10px", borderRadius: "8px", border: "2px solid #c9952a",
+            backdropFilter: "blur(8px)", boxShadow: "0 6px 25px rgba(0,0,0,0.9)"
+          }}>
+            <div style={{ color: "#c9952a", fontSize: "10px", fontWeight: "bold", textAlign: "center", marginBottom: "6px", borderBottom: "1px solid rgba(201,149,42,0.4)" }}>FERRAMENTAS GM</div>
+            <button onClick={() => setActiveTool("pan")} style={{ 
+              background: activeTool === "pan" ? "#c9952a" : "rgba(255,255,255,0.05)", 
+              color: activeTool === "pan" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
+              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
+              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
+            }}>✋ MOVER MAPA</button>
+            <button onClick={() => setActiveTool("select")} style={{ 
+              background: activeTool === "select" ? "#c9952a" : "rgba(255,255,255,0.05)", 
+              color: activeTool === "select" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
+              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
+              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
+            }}>↖ TOKENS</button>
+            <button onClick={() => setActiveTool("draw")} style={{ 
+              background: activeTool === "draw" ? "#c9952a" : "rgba(255,255,255,0.05)", 
+              color: activeTool === "draw" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
+              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
+              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
+            }}>✏ CANETA</button>
+            <button onClick={() => setActiveTool("fog")} style={{ 
+              background: activeTool === "fog" ? "#c9952a" : "rgba(255,255,255,0.05)", 
+              color: activeTool === "fog" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
+              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
+              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
+            }}>🌫 NÉVOA</button>
+            <button onClick={() => setActiveTool("terrain")} style={{ 
+              background: activeTool === "terrain" ? "#c9952a" : "rgba(255,255,255,0.05)", 
+              color: activeTool === "terrain" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
+              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
+              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
+            }}>🎨 TERRENO</button>
+          </div>
+        )}
       </div>
             <VTTGrid 
         role={role} 
