@@ -5651,23 +5651,26 @@ function HandoutGridLayer({ handoutData, onClose }) {
 
 // ── VTTApp: detecta papel do grimório via CustomEvent ──
 function VTTApp() {
-  const [role, setRole] = useState(() => {
-    // 1. Verifica se isMaster está explicitamente definido
-    if (typeof window.isMaster !== "undefined" && window.isMaster) return "GM";
-    
-    // 2. Verifica se o usuário atual é o dono da sala (Room Owner)
-    // No sistema do Grimório, o criador da sala geralmente tem seu ID comparado com o dono da sala
-    const currentUserId = window.userId || (window.currentUser && window.currentUser.id);
-    const roomOwnerId = window.roomOwnerId || (window.currentRoom && window.currentRoom.ownerId);
-    
-    if (currentUserId && roomOwnerId && currentUserId === roomOwnerId) {
-      console.log("User identified as Room Owner. Granting GM role.");
-      return "GM";
-    }
-
-    return "PLAYER";
-  });
+  const [role, setRole] = useState("PLAYER");
   const [activeTool, setActiveTool] = useState("select");
+  
+  // Detecção inicial e contínua
+  useEffect(() => {
+    const checkRole = () => {
+      const isMaster = !!window.isMaster;
+      const currentUserId = window.userId || (window.currentUser && window.currentUser.id);
+      const roomOwnerId = window.roomOwnerId || (window.currentRoom && window.currentRoom.ownerId);
+      const isOwner = !!(currentUserId && roomOwnerId && currentUserId === roomOwnerId);
+      
+      if ((isMaster || isOwner || window.debugGM) && role !== "GM") {
+        setRole("GM");
+      }
+    };
+    
+    checkRole();
+    const interval = setInterval(checkRole, 1000);
+    return () => clearInterval(interval);
+  }, [role]);
   
   useEffect(() => {
     const handler = (e) => {
@@ -5714,71 +5717,85 @@ function VTTApp() {
       overflow: "hidden",
       background: "#000"
     }}>
-      {(role === "GM" || window.debugGM) && (
-        <div style={{ 
-          position: "fixed", 
-          bottom: "30px", 
-          left: "50%", 
-          transform: "translateX(-50%)", 
-          zIndex: 999999, 
-          display: "flex", 
-          gap: "12px", 
-          background: "#1a1610", 
-          padding: "12px 24px", 
-          borderRadius: "14px", 
-          border: "2px solid #c9952a", 
-          boxShadow: "0 10px 40px rgba(0,0,0,0.9)",
-          backdropFilter: "blur(8px)",
-          alignItems: "center"
-        }}>
-          <div style={{ color: "#c9952a", fontSize: "11px", fontWeight: "bold", fontFamily: "Cinzel, serif", marginRight: "8px", borderRight: "1px solid rgba(201,149,42,0.3)", paddingRight: "12px" }}>CONTROLE DO MESTRE</div>
+      <div style={{ 
+        position: "fixed", 
+        top: "10px", 
+        left: "120px", 
+        zIndex: 999999, 
+        display: "flex", 
+        gap: "10px", 
+        alignItems: "center" 
+      }}>
+        {role !== "GM" && !window.debugGM ? (
           <button 
-            onClick={() => setActiveTool("select")} 
-            style={{ 
-              background: activeTool === "select" ? "linear-gradient(135deg, #c9952a, #a67c21)" : "rgba(30,30,30,0.6)", 
-              color: activeTool === "select" ? "#fff" : "#c9952a", 
-              border: "1px solid #c9952a", 
-              padding: "6px 16px", 
-              borderRadius: "6px", 
-              cursor: "pointer", 
-              fontSize: "13px", 
-              fontWeight: "bold", 
-              transition: "all 0.2s",
+            onClick={() => { window.forceGM(true); }}
+            style={{
+              background: "rgba(201,149,42,0.15)",
+              color: "#c9952a",
+              border: "1px solid #c9952a",
+              borderRadius: "4px",
+              padding: "5px 12px",
+              fontSize: "11px",
+              fontWeight: "bold",
+              cursor: "pointer",
               fontFamily: "Cinzel, serif",
-              letterSpacing: "0.05em"
-            }}>↖ MOVER</button>
-          <button 
-            onClick={() => setActiveTool("draw")} 
-            style={{ 
-              background: activeTool === "draw" ? "linear-gradient(135deg, #c9952a, #a67c21)" : "rgba(30,30,30,0.6)", 
-              color: activeTool === "draw" ? "#fff" : "#c9952a", 
-              border: "1px solid #c9952a", 
-              padding: "6px 16px", 
-              borderRadius: "6px", 
-              cursor: "pointer", 
-              fontSize: "13px", 
-              fontWeight: "bold", 
-              transition: "all 0.2s",
-              fontFamily: "Cinzel, serif",
-              letterSpacing: "0.05em"
-            }}>✏ CANETA</button>
-          <button 
-            onClick={() => setActiveTool("fog")} 
-            style={{ 
-              background: activeTool === "fog" ? "linear-gradient(135deg, #c9952a, #a67c21)" : "rgba(30,30,30,0.6)", 
-              color: activeTool === "fog" ? "#fff" : "#c9952a", 
-              border: "1px solid #c9952a", 
-              padding: "6px 16px", 
-              borderRadius: "6px", 
-              cursor: "pointer", 
-              fontSize: "13px", 
-              fontWeight: "bold", 
-              transition: "all 0.2s",
-              fontFamily: "Cinzel, serif",
-              letterSpacing: "0.05em"
-            }}>🌫 NÉVOA</button>
-        </div>
-      )}
+              backdropFilter: "blur(4px)"
+            }}
+          >
+            ATIVAR MODO MESTRE ⚔
+          </button>
+        ) : (
+          <div style={{ 
+            display: "flex", 
+            gap: "6px", 
+            background: "rgba(20,15,10,0.9)", 
+            padding: "4px 8px", 
+            borderRadius: "8px", 
+            border: "1px solid #c9952a",
+            backdropFilter: "blur(4px)"
+          }}>
+            <button 
+              onClick={() => setActiveTool("select")} 
+              style={{ 
+                background: activeTool === "select" ? "#c9952a" : "transparent", 
+                color: activeTool === "select" ? "#000" : "#c9952a", 
+                border: "none", 
+                padding: "4px 10px", 
+                borderRadius: "4px", 
+                cursor: "pointer", 
+                fontSize: "11px", 
+                fontWeight: "bold",
+                fontFamily: "Cinzel, serif"
+              }}>MOVER</button>
+            <button 
+              onClick={() => setActiveTool("draw")} 
+              style={{ 
+                background: activeTool === "draw" ? "#c9952a" : "transparent", 
+                color: activeTool === "draw" ? "#000" : "#c9952a", 
+                border: "none", 
+                padding: "4px 10px", 
+                borderRadius: "4px", 
+                cursor: "pointer", 
+                fontSize: "11px", 
+                fontWeight: "bold",
+                fontFamily: "Cinzel, serif"
+              }}>CANETA</button>
+            <button 
+              onClick={() => setActiveTool("fog")} 
+              style={{ 
+                background: activeTool === "fog" ? "#c9952a" : "transparent", 
+                color: activeTool === "fog" ? "#000" : "#c9952a", 
+                border: "none", 
+                padding: "4px 10px", 
+                borderRadius: "4px", 
+                cursor: "pointer", 
+                fontSize: "11px", 
+                fontWeight: "bold",
+                fontFamily: "Cinzel, serif"
+              }}>NÉVOA</button>
+          </div>
+        )}
+      </div>
       <VTTGrid 
         role={role} 
         cellSize={40} 
@@ -5786,28 +5803,7 @@ function VTTApp() {
         setActiveTool={setActiveTool} 
       />
       
-      {/* Botão de emergência caso a detecção de GM falhe */}
-      {role !== "GM" && (
-        <button 
-          onClick={() => window.forceGM(true)}
-          style={{
-            position: "fixed",
-            top: "10px",
-            right: "80px",
-            zIndex: 999999,
-            background: "rgba(0,0,0,0.3)",
-            color: "rgba(255,255,255,0.2)",
-            border: "none",
-            borderRadius: "4px",
-            padding: "2px 6px",
-            fontSize: "9px",
-            cursor: "pointer"
-          }}
-          title="Clique aqui se você for o Mestre e os controles não aparecerem"
-        >
-          ATIVAR GM
-        </button>
-      )}
+
     </div>
   );
 }
