@@ -5681,7 +5681,13 @@ window._mountVTT = function() {
     _vttRoot = ReactDOM.createRoot(root);
   }
   _vttRoot.render(<VTTApp />);
-  setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
+  // Re-dispara o role após render para garantir que o painel GM aparece corretamente
+  setTimeout(() => {
+    window.dispatchEvent(new Event("resize"));
+    if(typeof window.isMaster !== "undefined"){
+      window.dispatchEvent(new CustomEvent('grimorio:rolechange', { detail: { isMaster: !!window.isMaster } }));
+    }
+  }, 80);
 };
 window._unmountVTT = function() {
   if(_vttRoot){ _vttRoot.render(null); }
