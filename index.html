@@ -2389,12 +2389,7 @@ async function iniciarSessao(nome, code, criando){
   // #19: isMaster já está confirmado neste ponto — botão encerrar aparece correctamente
   if(isMaster){ 
     const b=$('btn-encerrar'); if(b) b.classList.remove('hidden'); 
-    window.isMaster = true; // garante para o React
-  } else {
-    window.isMaster = false;
   }
-  // FIX #3: notificar VTT via CustomEvent (evita polling com setInterval)
-  window.dispatchEvent(new CustomEvent('grimorio:rolechange', { detail: { isMaster } }));
   renderAll();
   toast('✦ Bem-vindo, '+nome+'! Sala: '+code, 3000);
   registarSessao(code);
@@ -2436,10 +2431,7 @@ function showTab(id, btn){
     $('header').style.display = 'none';
     $('main-nav').style.display = 'none';
     $('player-bar').style.display = 'none';
-    // Garante que window.isMaster está correto ANTES de montar o VTT
-    window.isMaster = !!isMaster;
-    // Dispara rolechange antes de montar para que o VTTApp inicie já com role correto
-    window.dispatchEvent(new CustomEvent('grimorio:rolechange', { detail: { isMaster: !!isMaster } }));
+    // _mountVTT lê `isMaster` diretamente do closure do grimório
     if(typeof window._mountVTT==='function') window._mountVTT();
   } else {
     $('header').style.display = 'block';
@@ -5705,59 +5697,24 @@ function HandoutGridLayer({ handoutData, onClose }) {
   );
 }
 
-// ── VTTApp: detecta papel do grimório via CustomEvent ──
-function VTTApp({ initialRole }) {
-  const isGMNow = () => !!(window.isMaster || window.debugGM);
-  const [role, setRole] = useState(() => {
-    // Verifica tanto initialRole quanto window.isMaster para evitar flash de PLAYER
-    if (initialRole === "GM") return "GM";
-    if (isGMNow()) return "GM";
-    return initialRole || "PLAYER";
-  });
+// ── VTTApp: role 100% determinado pelo prop passado pelo grimório ──
+// Sem estado interno de role, sem polling, sem CustomEvent de role.
+// O grimório chama _mountVTT() a cada vez que navega para o mapa,
+// passando o role correto diretamente. React re-renderiza com o valor certo.
+function VTTApp({ role: roleProp }) {
   const [activeTool, setActiveTool] = useState("pan");
 
-  // Responde imediatamente a mudanças no prop initialRole (quando _mountVTT chama render novamente)
-  useEffect(() => {
-    if (initialRole === "GM") {
-      setRole("GM");
-    } else if (initialRole === "PLAYER" && !isGMNow()) {
-      setRole("PLAYER");
-    } else if (isGMNow()) {
-      setRole("GM");
-    }
-  }, [initialRole]);
+  // role é o prop puro — sem fallback para window.isMaster dentro do React
+  const effectiveRole = roleProp === "GM" ? "GM" : "PLAYER";
 
+  // forceGM: permite debug manual sem re-mount
+  const [debugGM, setDebugGM] = useState(false);
   useEffect(() => {
-    const applyRole = () => {
-      const shouldBeGM = isGMNow();
-      setRole(prev => {
-        const next = shouldBeGM ? "GM" : "PLAYER";
-        return next;
-      });
-    };
-    const onRoleChange = (e) => {
-      if (e.detail && typeof e.detail.isMaster !== "undefined") {
-        window.isMaster = !!e.detail.isMaster;
-      }
-      applyRole();
-    };
-    window.forceGM = (v) => { window.debugGM = v; applyRole(); };
-    window.addEventListener("grimorio:rolechange", onRoleChange);
-    // Polling mais rápido (100ms) para garantir sincronização
-    const timer = setInterval(applyRole, 100);
-    // Aplica imediatamente e em curtos intervalos para cobrir race conditions
-    applyRole();
-    setTimeout(applyRole, 50);
-    setTimeout(applyRole, 150);
-    setTimeout(applyRole, 350);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("grimorio:rolechange", onRoleChange);
-    };
+    window.forceGM = (v) => setDebugGM(!!v);
+    return () => { delete window.forceGM; };
   }, []);
 
-  // Override de segurança: se window.isMaster é true mas o estado ainda não actualizou, forçar "GM"
-  const effectiveRole = (role === "GM" || isGMNow()) ? "GM" : role;
+  const finalRole = (effectiveRole === "GM" || debugGM) ? "GM" : "PLAYER";
 
   return (
     <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden", background: "#000" }}>
@@ -5765,15 +5722,7 @@ function VTTApp({ initialRole }) {
         position: "fixed", top: "52px", left: "12px", zIndex: 999999, 
         display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-start" 
       }}>
-        {effectiveRole !== "GM" && (
-          <button onClick={() => window.forceGM(true)} style={{
-            background: "#c9952a", color: "#000", border: "1px solid #000", borderRadius: "4px",
-            padding: "8px 16px", fontSize: "12px", fontWeight: "bold", cursor: "pointer",
-            fontFamily: "Cinzel, serif", boxShadow: "0 4px 15px rgba(0,0,0,0.6)"
-          }}>⚔ ATIVAR MODO MESTRE</button>
-        )}
-        
-        {effectiveRole === "GM" && (
+        {finalRole === "GM" && (
           <div style={{ 
             display: "flex", flexDirection: "column", gap: "4px", background: "rgba(20,15,10,0.98)", 
             padding: "10px", borderRadius: "8px", border: "2px solid #c9952a",
@@ -5813,8 +5762,8 @@ function VTTApp({ initialRole }) {
           </div>
         )}
       </div>
-            <VTTGrid 
-        role={effectiveRole} 
+      <VTTGrid 
+        role={finalRole} 
         cellSize={40} 
         activeTool={activeTool} 
         setActiveTool={setActiveTool} 
@@ -5824,35 +5773,22 @@ function VTTApp({ initialRole }) {
 }
 
 // ── Mount (lazy, chamado pelo showTab do grimório) ──
-let _mounted = false;
+// REGRA: _mountVTT lê `isMaster` DIRETAMENTE do closure do grimório (não de window)
+// e passa como prop. O React recebe o valor correto de forma síncrona.
 let _vttRoot = null;
 window._mountVTT = function() {
   const root = document.getElementById("vtt-root");
   if(!root) return;
-  // Guard: recria root se _vttRoot for nulo ou _mounted estiver inconsistente
-  if(!_mounted || !_vttRoot){
-    _mounted = true;
+  if(!_vttRoot){
     _vttRoot = ReactDOM.createRoot(root);
   }
-  // Garante window.isMaster sincronizado antes de renderizar
-  window.isMaster = !!window.isMaster;
-  // Passa o role atual como prop inicial para evitar flash de PLAYER
-  const initRole = !!(window.isMaster || window.debugGM) ? "GM" : "PLAYER";
-  _vttRoot.render(<VTTApp initialRole={initRole} />);
-  // Re-dispara o role em múltiplos momentos para cobrir race conditions
-  const fireRole = () => {
-    const gm = !!(window.isMaster || window.debugGM);
-    window.dispatchEvent(new Event("resize"));
-    window.dispatchEvent(new CustomEvent('grimorio:rolechange', { detail: { isMaster: gm } }));
-  };
-  setTimeout(fireRole, 50);
-  setTimeout(fireRole, 150);
-  setTimeout(fireRole, 400);
-  setTimeout(fireRole, 800);
+  // `isMaster` é a variável do escopo do grimório — lida diretamente, sem window
+  // Isso garante que o valor é sempre o correto no momento do clique em "Mapa"
+  const role = isMaster ? "GM" : "PLAYER";
+  _vttRoot.render(<VTTApp role={role} />);
 };
 window._unmountVTT = function() {
   if(_vttRoot){ _vttRoot.unmount(); _vttRoot = null; }
-  _mounted = false;
 };
 
 })();
