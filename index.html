@@ -5350,7 +5350,8 @@ function useKeyboard(isPanMode, setIsPanMode, permissions, setActiveTool, undoLa
 }
 
 // ── VTTGrid principal ──
-function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select", setActiveTool }) {
+function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
+  const [activeTool, setActiveTool] = useState("pan");
   const containerRef = useRef(null);
   const [size, setSize]         = useState({ width:800, height:600 });
   const [showRO, setShowRO]     = useState(false);
@@ -5697,98 +5698,43 @@ function HandoutGridLayer({ handoutData, onClose }) {
   );
 }
 
-// ── VTTApp: role 100% determinado pelo prop passado pelo grimório ──
-// Sem estado interno de role, sem polling, sem CustomEvent de role.
-// O grimório chama _mountVTT() a cada vez que navega para o mapa,
-// passando o role correto diretamente. React re-renderiza com o valor certo.
-function VTTApp({ role: roleProp }) {
-  const [activeTool, setActiveTool] = useState("pan");
-
-  // role é o prop puro — sem fallback para window.isMaster dentro do React
-  const effectiveRole = roleProp === "GM" ? "GM" : "PLAYER";
-
-  // forceGM: permite debug manual sem re-mount
-  const [debugGM, setDebugGM] = useState(false);
-  useEffect(() => {
-    window.forceGM = (v) => setDebugGM(!!v);
-    return () => { delete window.forceGM; };
-  }, []);
-
-  const finalRole = (effectiveRole === "GM" || debugGM) ? "GM" : "PLAYER";
-
+// ── VTTApp: wrapper mínimo — role vem diretamente do grimório ──
+// VTTGrid já contém o GMToolbox com TODAS as ferramentas do mestre.
+// VTTApp não tem estado próprio — é só um wrapper de role.
+function VTTApp({ role }) {
   return (
-    <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden", background: "#000" }}>
-      <div style={{ 
-        position: "fixed", top: "52px", left: "12px", zIndex: 999999, 
-        display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-start" 
-      }}>
-        {finalRole === "GM" && (
-          <div style={{ 
-            display: "flex", flexDirection: "column", gap: "4px", background: "rgba(20,15,10,0.98)", 
-            padding: "10px", borderRadius: "8px", border: "2px solid #c9952a",
-            backdropFilter: "blur(8px)", boxShadow: "0 6px 25px rgba(0,0,0,0.9)"
-          }}>
-            <div style={{ color: "#c9952a", fontSize: "10px", fontWeight: "bold", textAlign: "center", marginBottom: "6px", borderBottom: "1px solid rgba(201,149,42,0.4)" }}>FERRAMENTAS GM</div>
-            <button onClick={() => setActiveTool("pan")} style={{ 
-              background: activeTool === "pan" ? "#c9952a" : "rgba(255,255,255,0.05)", 
-              color: activeTool === "pan" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
-              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
-              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
-            }}>✋ MOVER MAPA</button>
-            <button onClick={() => setActiveTool("select")} style={{ 
-              background: activeTool === "select" ? "#c9952a" : "rgba(255,255,255,0.05)", 
-              color: activeTool === "select" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
-              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
-              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
-            }}>↖ TOKENS</button>
-            <button onClick={() => setActiveTool("draw")} style={{ 
-              background: activeTool === "draw" ? "#c9952a" : "rgba(255,255,255,0.05)", 
-              color: activeTool === "draw" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
-              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
-              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
-            }}>✏ CANETA</button>
-            <button onClick={() => setActiveTool("fog")} style={{ 
-              background: activeTool === "fog" ? "#c9952a" : "rgba(255,255,255,0.05)", 
-              color: activeTool === "fog" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
-              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
-              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
-            }}>🌫 NÉVOA</button>
-            <button onClick={() => setActiveTool("terrain")} style={{ 
-              background: activeTool === "terrain" ? "#c9952a" : "rgba(255,255,255,0.05)", 
-              color: activeTool === "terrain" ? "#000" : "#e0ddd8", border: "1px solid rgba(201,149,42,0.4)", 
-              padding: "8px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "bold",
-              textAlign: "left", width: "100%", fontFamily: "Cinzel, serif"
-            }}>🎨 TERRENO</button>
-          </div>
-        )}
-      </div>
-      <VTTGrid 
-        role={finalRole} 
-        cellSize={40} 
-        activeTool={activeTool} 
-        setActiveTool={setActiveTool} 
-      />
+    <div style={{ width:"100vw", height:"100vh", position:"relative", overflow:"hidden", background:"#000" }}>
+      <VTTGrid role={role} cellSize={40} />
     </div>
   );
 }
 
-// ── Mount (lazy, chamado pelo showTab do grimório) ──
-// REGRA: _mountVTT lê `isMaster` DIRETAMENTE do closure do grimório (não de window)
-// e passa como prop. O React recebe o valor correto de forma síncrona.
-let _vttRoot = null;
+// ── Mount: recria root a cada navegação para garantir role fresco ──
+// Destruir + recriar o root força o React a montar do zero com o role correto.
+// Isso elimina qualquer chance de estado residual de sessão anterior.
 window._mountVTT = function() {
-  const root = document.getElementById("vtt-root");
-  if(!root) return;
-  if(!_vttRoot){
-    _vttRoot = ReactDOM.createRoot(root);
+  const container = document.getElementById("vtt-root");
+  if(!container) return;
+  // Desmonta root anterior se existir
+  if(container._vttRoot){
+    try { container._vttRoot.unmount(); } catch(e){}
+    delete container._vttRoot;
   }
-  // `isMaster` é a variável do escopo do grimório — lida diretamente, sem window
-  // Isso garante que o valor é sempre o correto no momento do clique em "Mapa"
+  container.innerHTML = "";
+  // isMaster lido DIRETAMENTE do closure JS do grimório (variável local, não window)
   const role = isMaster ? "GM" : "PLAYER";
-  _vttRoot.render(<VTTApp role={role} />);
+  const root = ReactDOM.createRoot(container);
+  root.render(<VTTApp role={role} />);
+  container._vttRoot = root;
 };
 window._unmountVTT = function() {
-  if(_vttRoot){ _vttRoot.unmount(); _vttRoot = null; }
+  const container = document.getElementById("vtt-root");
+  if(!container) return;
+  if(container._vttRoot){
+    try { container._vttRoot.unmount(); } catch(e){}
+    delete container._vttRoot;
+  }
+  container.innerHTML = "";
 };
 
 })();
