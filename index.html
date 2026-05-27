@@ -2436,9 +2436,10 @@ function showTab(id, btn){
     $('header').style.display = 'none';
     $('main-nav').style.display = 'none';
     $('player-bar').style.display = 'none';
-    // Adicionar um botão flutuante para voltar (opcional, ou apenas via JS se houver atalho)
-    // Para facilitar, vamos deixar o nav visível mas fixo no topo se preferir, 
-    // mas o pedido foi "tirar o sub titulo", indicando esconder o topo.
+    // Garante que window.isMaster está correto ANTES de montar o VTT
+    window.isMaster = !!isMaster;
+    // Dispara rolechange antes de montar para que o VTTApp inicie já com role correto
+    window.dispatchEvent(new CustomEvent('grimorio:rolechange', { detail: { isMaster: !!isMaster } }));
     if(typeof window._mountVTT==='function') window._mountVTT();
   } else {
     $('header').style.display = 'block';
@@ -5705,30 +5706,23 @@ function HandoutGridLayer({ handoutData, onClose }) {
 }
 
 // ── VTTApp: detecta papel do grimório via CustomEvent ──
-function VTTApp() {
-  const [role, setRole] = useState(() => (window.isMaster || window.debugGM) ? "GM" : "PLAYER");
+function VTTApp({ initialRole }) {
+  const isGMNow = () => !!(window.isMaster || window.debugGM);
+  const [role, setRole] = useState(() => initialRole || (isGMNow() ? "GM" : "PLAYER"));
   const [activeTool, setActiveTool] = useState("pan");
-  const roleRef = useRef((window.isMaster || window.debugGM) ? "GM" : "PLAYER");
 
   useEffect(() => {
-    const check = () => {
-      const gm = !!(window.isMaster || window.debugGM);
-      const next = gm ? "GM" : "PLAYER";
-      if (next !== roleRef.current) {
-        roleRef.current = next;
-        setRole(next);
-      }
-    };
+    const applyRole = () => { setRole(isGMNow() ? "GM" : "PLAYER"); };
     const onRoleChange = (e) => {
       if (e.detail && typeof e.detail.isMaster !== "undefined") {
         window.isMaster = e.detail.isMaster;
       }
-      check();
+      applyRole();
     };
-    window.forceGM = (v) => { window.debugGM = v; check(); };
+    window.forceGM = (v) => { window.debugGM = v; applyRole(); };
     window.addEventListener("grimorio:rolechange", onRoleChange);
-    const timer = setInterval(check, 500);
-    check();
+    const timer = setInterval(applyRole, 300);
+    applyRole();
     return () => {
       clearInterval(timer);
       window.removeEventListener("grimorio:rolechange", onRoleChange);
@@ -5809,20 +5803,19 @@ window._mountVTT = function() {
     _mounted = true;
     _vttRoot = ReactDOM.createRoot(root);
   }
-  _vttRoot.render(<VTTApp />);
-  // Re-dispara o role após render para garantir que o painel GM aparece corretamente
-  // Dois disparos: 80ms (render inicial) e 350ms (fallback para listeners lentos)
+  // Passa o role atual como prop inicial para evitar flash de PLAYER
+  const initRole = !!(window.isMaster || window.debugGM) ? "GM" : "PLAYER";
+  _vttRoot.render(<VTTApp initialRole={initRole} />);
+  // Re-dispara o role após render como garantia adicional
   const fireRole = () => {
     window.dispatchEvent(new Event("resize"));
-    if(typeof window.isMaster !== "undefined"){
-      window.dispatchEvent(new CustomEvent('grimorio:rolechange', { detail: { isMaster: !!window.isMaster } }));
-    }
+    window.dispatchEvent(new CustomEvent('grimorio:rolechange', { detail: { isMaster: !!(window.isMaster || window.debugGM) } }));
   };
   setTimeout(fireRole, 80);
-  setTimeout(fireRole, 350);
+  setTimeout(fireRole, 400);
 };
 window._unmountVTT = function() {
-  if(_vttRoot){ _vttRoot.render(null); }
+  if(_vttRoot){ _vttRoot.unmount(); _vttRoot = null; }
   _mounted = false;
 };
 
