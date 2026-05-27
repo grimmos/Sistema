@@ -558,7 +558,14 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 .session-btn.end:active{background:rgba(122,26,26,.3);}
 
 
-/* ══ CHAT GLOBAL DE DADOS ══ */
+/* ── Ping animation ── */
+@keyframes pingAnim {
+  0%   { transform:scale(0.3); opacity:1; }
+  70%  { transform:scale(1.8); opacity:0.6; }
+  100% { transform:scale(2.5); opacity:0; }
+}
+
+/* ── CHAT GLOBAL DE DADOS (Roll20-style) ── */
 #chat-fab {
   position: fixed;
   bottom: 22px;
@@ -570,7 +577,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
   background: linear-gradient(135deg,#2a1a06 60%,#3d2a0a);
   border: 1.5px solid rgba(201,149,42,.55);
   box-shadow: 0 4px 22px rgba(0,0,0,.65), 0 0 14px rgba(201,149,42,.18);
-  display: none; /* mostrado só quando em sala */
+  display: none;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -1343,7 +1350,189 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 
 <div class="toast" id="toast"></div>
 
-<!-- ══ CHAT GLOBAL DE DADOS ══ -->
+<!-- ══ CHAT GLOBAL DE DADOS (Roll20-style) ══ -->
+<style>
+#chat-panel {
+  position: fixed;
+  bottom: 84px; right: 14px;
+  width: 320px; height: 520px;
+  background: rgba(12,8,3,.97);
+  border: 1px solid rgba(201,149,42,.28);
+  border-radius: 6px;
+  z-index: 8999;
+  display: flex; flex-direction: column;
+  box-shadow: 0 8px 40px rgba(0,0,0,.75);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+  transition: opacity .2s, transform .2s;
+}
+#chat-panel.hidden { display: none; }
+
+.chat-panel-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px 8px;
+  background: linear-gradient(90deg,rgba(20,12,3,.9),rgba(30,18,5,.9));
+  border-bottom: 1px solid rgba(201,149,42,.2);
+  flex-shrink: 0;
+}
+.chat-panel-title {
+  font-family:'Cinzel',serif; font-size:11px; letter-spacing:3px;
+  color:var(--gold2); text-transform:uppercase;
+}
+.chat-close-btn {
+  background:transparent; border:none; color:rgba(201,149,42,.4);
+  font-size:14px; cursor:pointer; padding:2px 6px; border-radius:3px;
+  transition:color .15s;
+}
+.chat-close-btn:hover { color:var(--gold); }
+
+/* Tabs */
+.chat-tabs {
+  display:flex; border-bottom:1px solid rgba(201,149,42,.15);
+  background:rgba(10,6,2,.6); flex-shrink:0;
+}
+.chat-tab-btn {
+  flex:1; font-family:'Cinzel',serif; font-size:9px; letter-spacing:2px;
+  padding:7px 4px; border:none; background:transparent;
+  color:rgba(201,149,42,.35); cursor:pointer; text-transform:uppercase;
+  border-bottom:2px solid transparent; transition:all .15s;
+}
+.chat-tab-btn.active {
+  color:var(--gold2); border-bottom-color:var(--gold2);
+  background:rgba(201,149,42,.05);
+}
+
+/* Master bar */
+.chat-master-bar {
+  display:none; align-items:center; justify-content:space-between;
+  padding:6px 12px; background:rgba(122,26,26,.12);
+  border-bottom:1px solid rgba(160,32,32,.2); flex-shrink:0; gap:8px;
+}
+.chat-master-bar.show { display:flex; }
+.chat-master-lbl { font-family:'Cinzel',serif; font-size:9px; letter-spacing:1px; color:rgba(201,149,42,.5); }
+.chat-toggle-wrap { display:flex; align-items:center; gap:6px; }
+.chat-toggle-txt  { font-family:'Cinzel',serif; font-size:9px; letter-spacing:1px; }
+.chat-toggle { position:relative; display:inline-block; width:34px; height:18px; }
+.chat-toggle input { opacity:0; width:0; height:0; }
+.chat-toggle-slider { position:absolute; cursor:pointer; inset:0; background:rgba(201,149,42,.15); border-radius:9px; transition:.2s; border:1px solid rgba(201,149,42,.3); }
+.chat-toggle-slider::before { content:''; position:absolute; height:12px; width:12px; left:2px; bottom:2px; background:rgba(201,149,42,.5); border-radius:50%; transition:.2s; }
+.chat-toggle input:checked + .chat-toggle-slider { background:rgba(60,140,60,.3); border-color:rgba(80,200,80,.4); }
+.chat-toggle input:checked + .chat-toggle-slider::before { transform:translateX(16px); background:rgba(120,220,140,.9); }
+
+/* Messages area */
+#chat-msgs {
+  flex:1; overflow-y:auto; padding:8px 10px;
+  display:flex; flex-direction:column; gap:5px;
+  scrollbar-width:thin; scrollbar-color:rgba(201,149,42,.15) transparent;
+}
+#chat-msgs::-webkit-scrollbar { width:3px; }
+#chat-msgs::-webkit-scrollbar-thumb { background:rgba(201,149,42,.18); border-radius:2px; }
+
+.chat-empty {
+  font-family:'Cinzel',serif; font-size:10px; letter-spacing:2px;
+  color:rgba(201,149,42,.22); text-align:center; text-transform:uppercase;
+  margin:auto; padding:20px 0;
+}
+
+/* Chat entries */
+.chat-entry {
+  background:rgba(10,6,2,.6); border:1px solid rgba(201,149,42,.1);
+  border-radius:4px; padding:8px 10px; animation:chatIn .2s ease;
+}
+.chat-entry.entry-crit { border-color:rgba(201,149,42,.45); background:rgba(201,149,42,.07); }
+.chat-entry.entry-good { border-color:rgba(80,180,80,.25); background:rgba(60,130,60,.05); }
+.chat-entry.entry-text { border-color:rgba(201,149,42,.12); background:rgba(15,9,3,.7); }
+.chat-entry.entry-system { border-color:rgba(80,80,180,.25); background:rgba(30,30,80,.1); }
+.chat-entry.entry-whisper { border-color:rgba(160,80,200,.3); background:rgba(60,20,80,.15); }
+@keyframes chatIn { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+
+.chat-entry-top {
+  display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px;
+}
+.chat-player-name { font-family:'Cinzel',serif; font-size:10px; letter-spacing:2px; color:var(--gold2); text-transform:uppercase; }
+.chat-player-name.is-master { color:#e08080; }
+.chat-entry-time  { font-family:'Cinzel',serif; font-size:8px; letter-spacing:1px; color:rgba(201,149,42,.3); }
+.chat-skill-name  { font-family:'Cinzel',serif; font-size:11px; color:rgba(244,234,208,.6); margin-bottom:5px; }
+.chat-text-body   { font-family:'Crimson Text',serif; font-size:14px; color:rgba(244,234,208,.75); line-height:1.55; word-break:break-word; }
+.chat-whisper-label { font-family:'Cinzel',serif; font-size:9px; letter-spacing:2px; color:rgba(180,100,255,.6); margin-bottom:4px; text-transform:uppercase; }
+.chat-dice-row { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:5px; }
+.chat-die { width:24px; height:24px; border-radius:4px; background:rgba(201,149,42,.1); border:1px solid rgba(201,149,42,.25); display:flex; align-items:center; justify-content:center; font-family:'Cinzel Decorative',serif; font-size:12px; color:rgba(244,234,208,.7); }
+.chat-die.die-crit { background:rgba(201,149,42,.25); border-color:var(--gold2); color:var(--gold2); box-shadow:0 0 8px rgba(201,149,42,.3); }
+.chat-die.die-hi   { background:rgba(201,149,42,.12); border-color:rgba(201,149,42,.5); }
+.chat-result { font-family:'Cinzel',serif; font-size:10px; letter-spacing:1px; }
+.chat-result.r-norm { color:rgba(244,234,208,.5); }
+.chat-result.r-good { color:rgba(120,220,120,.8); }
+.chat-result.r-crit { color:var(--gold2); }
+
+/* Inline dice result (manual roll) */
+.chat-manual-roll {
+  display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:4px;
+}
+.chat-manual-formula { font-family:'Cinzel',serif; font-size:10px; color:rgba(201,149,42,.5); letter-spacing:1px; }
+.chat-manual-total { font-family:'Cinzel Decorative',serif; font-size:18px; color:var(--gold2); min-width:28px; text-align:center; }
+
+/* Input area */
+.chat-input-area {
+  border-top:1px solid rgba(201,149,42,.15); padding:8px 10px;
+  background:rgba(10,6,2,.8); flex-shrink:0;
+}
+.chat-dice-shortcuts {
+  display:flex; gap:4px; margin-bottom:7px; flex-wrap:wrap;
+}
+.chat-dice-btn {
+  font-family:'Cinzel',serif; font-size:9px; letter-spacing:1px;
+  padding:4px 8px; border-radius:4px; cursor:pointer; text-transform:uppercase;
+  border:1px solid rgba(201,149,42,.25); background:rgba(201,149,42,.06);
+  color:rgba(201,149,42,.65); transition:all .15s; white-space:nowrap;
+}
+.chat-dice-btn:hover { background:rgba(201,149,42,.14); color:var(--gold2); border-color:rgba(201,149,42,.45); }
+.chat-dice-btn:active { background:rgba(201,149,42,.22); }
+.chat-dice-btn.special { border-color:rgba(160,80,220,.35); color:rgba(180,120,255,.65); background:rgba(80,20,120,.08); }
+.chat-dice-btn.special:hover { background:rgba(80,20,120,.2); color:rgba(200,150,255,.9); }
+
+.chat-input-row {
+  display:flex; gap:6px; align-items:flex-end;
+}
+.chat-txt-inp {
+  flex:1; font-family:'Crimson Text',serif; font-size:14px;
+  background:rgba(20,12,4,.8); border:1px solid rgba(201,149,42,.22);
+  color:rgba(244,234,208,.85); padding:8px 10px; border-radius:4px;
+  outline:none; resize:none; min-height:36px; max-height:80px;
+  line-height:1.4; -webkit-appearance:none;
+}
+.chat-txt-inp::placeholder { color:rgba(201,149,42,.2); }
+.chat-txt-inp:focus { border-color:rgba(201,149,42,.5); }
+.chat-send-btn {
+  font-family:'Cinzel',serif; font-size:10px; letter-spacing:1px;
+  padding:9px 12px; border-radius:4px; cursor:pointer; text-transform:uppercase;
+  border:1px solid rgba(201,149,42,.4); background:rgba(201,149,42,.1);
+  color:var(--gold2); transition:all .15s; white-space:nowrap; flex-shrink:0;
+}
+.chat-send-btn:hover { background:rgba(201,149,42,.2); }
+.chat-send-btn:active { background:rgba(201,149,42,.3); }
+
+/* Whisper toggle */
+.chat-whisper-row {
+  display:flex; align-items:center; gap:6px; margin-top:6px;
+}
+.chat-whisper-chk { accent-color: rgba(180,100,255,.8); width:13px; height:13px; cursor:pointer; }
+.chat-whisper-lbl { font-family:'Cinzel',serif; font-size:9px; letter-spacing:1px; color:rgba(180,100,255,.5); cursor:pointer; text-transform:uppercase; }
+select.chat-whisper-target {
+  font-family:'Cinzel',serif; font-size:9px; letter-spacing:1px;
+  background:rgba(20,12,4,.8); border:1px solid rgba(180,100,255,.25);
+  color:rgba(180,100,255,.7); padding:3px 6px; border-radius:3px; cursor:pointer;
+  outline:none; max-width:130px;
+}
+
+/* Aviso jogador (chat oculto pelo mestre) */
+.chat-hidden-notice {
+  display: none; flex:1; align-items:center; justify-content:center;
+  flex-direction:column; gap:8px; padding:20px;
+}
+.chat-hidden-notice.show { display:flex; }
+.chat-hidden-notice p { font-family:'Cinzel',serif; font-size:10px; letter-spacing:2px; color:rgba(201,149,42,.3); text-align:center; text-transform:uppercase; }
+</style>
+
 <div id="chat-fab" onclick="toggleChat()">
   ⚄
   <span class="chat-fab-badge" id="chat-badge"></span>
@@ -1352,20 +1541,23 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 <div id="chat-panel" class="hidden">
   <!-- Cabeçalho -->
   <div class="chat-panel-hdr">
-    <span class="chat-panel-title">✦ Chat de Dados</span>
-    <button class="chat-close-btn" onclick="toggleChat()">✕</button>
+    <span class="chat-panel-title">⚄ Chat de Dados</span>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <button onclick="clearChatLocal()" title="Limpar chat local" style="background:transparent;border:none;color:rgba(201,149,42,.3);font-size:12px;cursor:pointer;padding:2px 5px;" title="Limpar">🗑</button>
+      <button class="chat-close-btn" onclick="toggleChat()">✕</button>
+    </div>
   </div>
 
   <!-- Barra de controlo do Mestre -->
   <div class="chat-master-bar" id="chat-master-bar">
-    <span class="chat-master-lbl">Visibilidade dos Jogadores</span>
+    <span class="chat-master-lbl">Visível para jogadores</span>
     <div class="chat-toggle-wrap">
-      <span class="chat-toggle-txt" id="chat-toggle-txt" style="color:rgba(201,149,42,.35);">Oculto</span>
+      <span class="chat-toggle-txt" style="color:rgba(201,149,42,.35);">Não</span>
       <label class="chat-toggle">
-        <input type="checkbox" id="chat-vis-toggle" onchange="setChatVisibility(this.checked)">
+        <input type="checkbox" id="chat-vis-toggle" onchange="setChatVisibility(this.checked)" checked>
         <span class="chat-toggle-slider"></span>
       </label>
-      <span class="chat-toggle-txt" id="chat-toggle-on-txt" style="color:rgba(120,220,120,.7);">Visível</span>
+      <span class="chat-toggle-txt" style="color:rgba(120,220,120,.7);">Sim</span>
     </div>
   </div>
 
@@ -1377,7 +1569,45 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 
   <!-- Mensagens -->
   <div id="chat-msgs">
-    <p class="chat-empty" id="chat-empty">Nenhuma rolagem ainda...</p>
+    <p class="chat-empty" id="chat-empty">Nenhuma mensagem ainda...<br><span style="font-size:9px;opacity:.5;">Role dados ou envie uma mensagem</span></p>
+  </div>
+
+  <!-- Input area -->
+  <div class="chat-input-area" id="chat-input-area">
+    <!-- Dados rápidos -->
+    <div class="chat-dice-shortcuts">
+      <button class="chat-dice-btn" onclick="chatRollDice('1d4')"  title="Rolar 1d4">d4</button>
+      <button class="chat-dice-btn" onclick="chatRollDice('1d6')"  title="Rolar 1d6">d6</button>
+      <button class="chat-dice-btn" onclick="chatRollDice('2d6')"  title="Rolar 2d6">2d6</button>
+      <button class="chat-dice-btn" onclick="chatRollDice('3d6')"  title="Rolar 3d6">3d6</button>
+      <button class="chat-dice-btn" onclick="chatRollDice('1d8')"  title="Rolar 1d8">d8</button>
+      <button class="chat-dice-btn" onclick="chatRollDice('1d10')" title="Rolar 1d10">d10</button>
+      <button class="chat-dice-btn" onclick="chatRollDice('1d20')" title="Rolar 1d20">d20</button>
+      <button class="chat-dice-btn" onclick="chatRollDice('1d100')" title="Rolar 1d100">d%</button>
+      <button class="chat-dice-btn special" onclick="showCustomRollUI()" title="Fórmula personalizada">⚙ Custom</button>
+    </div>
+    <!-- Custom roll row (oculto por padrão) -->
+    <div id="chat-custom-row" style="display:none;margin-bottom:7px;display:none;">
+      <div style="display:flex;gap:5px;align-items:center;">
+        <input id="chat-custom-inp" class="chat-txt-inp" style="min-height:30px;max-height:30px;font-family:'Cinzel',serif;font-size:11px;" placeholder="ex: 2d6+3, 1d20-1..." maxlength="20">
+        <button class="chat-send-btn" style="padding:7px 10px;" onclick="sendCustomRoll()">🎲</button>
+        <button onclick="hideCustomRollUI()" style="background:transparent;border:none;color:rgba(201,149,42,.35);cursor:pointer;font-size:13px;padding:4px;">✕</button>
+      </div>
+    </div>
+    <!-- Texto livre -->
+    <div class="chat-input-row">
+      <textarea id="chat-txt-inp" class="chat-txt-inp" placeholder="Diga algo ao grupo..." maxlength="300" rows="1"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatText();}"></textarea>
+      <button class="chat-send-btn" onclick="sendChatText()">Enviar</button>
+    </div>
+    <!-- Whisper -->
+    <div class="chat-whisper-row" id="chat-whisper-row">
+      <input type="checkbox" class="chat-whisper-chk" id="chat-whisper-chk">
+      <label class="chat-whisper-lbl" for="chat-whisper-chk">Sussurro para:</label>
+      <select class="chat-whisper-target" id="chat-whisper-target">
+        <option value="">— jogador —</option>
+      </select>
+    </div>
   </div>
 </div>
 
@@ -1947,6 +2177,7 @@ function renderPlayerBar(){
 ═══════════════════════════════ */
 function renderAll(){
   renderPlayerBar();
+  updateWhisperTargets();
 
   // Mestre: sempre vê ficha de jogador, nunca a própria (não tem)
   if(isMaster){
@@ -2970,6 +3201,10 @@ function hideChatFab(){
   chatOpen = false;
 }
 
+/* ═══════════════════════════════════════
+   CHAT GLOBAL — Roll20-style
+═══════════════════════════════════════ */
+
 /* Controlo de visibilidade (Mestre) */
 function setChatVisibility(visible){
   if(!firebaseOK || !salaId || !isMaster) return;
@@ -2979,130 +3214,302 @@ function setChatVisibility(visible){
 
 function updateChatVisUI(visible){
   chatVisible = visible;
-  // Actualizar toggle do mestre
   const tog = $('chat-vis-toggle');
   if(tog) tog.checked = visible;
-  // Mostrar/esconder aviso para jogadores
-  const notice  = $('chat-hidden-notice');
-  const msgs    = $('chat-msgs');
+  const notice = $('chat-hidden-notice');
+  const msgs   = $('chat-msgs');
+  const inp    = $('chat-input-area');
   if(!isMaster){
     if(notice) notice.classList.toggle('show', !visible);
     if(msgs)   msgs.style.display = visible ? 'flex' : 'none';
+    if(inp)    inp.style.display  = visible ? 'block' : 'none';
   }
 }
 
-/* Publicar uma rolagem no chat (Firebase) */
+/* ── Publicar rolagem de perícia ── */
 function postRollToChat(skillName, diceResults, resultText, resultClass){
-  if(!firebaseOK || !salaId) return;
-  const p = me();
-  const displayName = p.charName || p.name || 'Aventureiro';
+  const p = isMaster ? null : me();
+  const displayName = isMaster ? '✦ Mestre' : (p ? (p.charName||p.name||'Aventureiro') : 'Aventureiro');
   const msg = {
+    type       : 'roll',
     playerName : displayName,
     playerId   : myId,
+    isMaster   : !!isMaster,
     skillName  : skillName,
     dice       : diceResults,
     resultText : resultText,
     resultClass: resultClass || 'r-norm',
     ts         : Date.now()
   };
-  db.ref('salas/'+salaId+'/chat').push(msg);
+  if(firebaseOK && salaId){
+    db.ref('salas/'+salaId+'/chat').push(msg);
+  } else {
+    renderChatEntry('local-'+Date.now(), msg);
+  }
 }
 
-/* Renderizar uma única entrada no chat */
+/* ── Enviar mensagem de texto ── */
+function sendChatText(){
+  const inp = $('chat-txt-inp');
+  const txt = inp ? inp.value.trim() : '';
+  if(!txt) return;
+  inp.value = '';
+
+  const p = isMaster ? null : me();
+  const displayName = isMaster ? '✦ Mestre' : (p ? (p.charName||p.name||'Aventureiro') : 'Aventureiro');
+
+  const whisperChk = $('chat-whisper-chk');
+  const whisperTgt = $('chat-whisper-target');
+  const isWhisper  = whisperChk && whisperChk.checked && whisperTgt && whisperTgt.value;
+  const whisperTo  = isWhisper ? whisperTgt.value : null;
+  const whisperName= isWhisper ? (whisperTgt.options[whisperTgt.selectedIndex]?.text || '') : null;
+
+  const msg = {
+    type        : isWhisper ? 'whisper' : 'text',
+    playerName  : displayName,
+    playerId    : myId,
+    isMaster    : !!isMaster,
+    text        : txt,
+    whisperTo   : whisperTo || null,
+    whisperName : whisperName || null,
+    ts          : Date.now()
+  };
+  if(firebaseOK && salaId){
+    db.ref('salas/'+salaId+'/chat').push(msg);
+  } else {
+    renderChatEntry('local-'+Date.now(), msg);
+  }
+}
+
+/* ── Rolagem manual via botões rápidos ── */
+function chatRollDice(formula){
+  const result = evalDiceFormula(formula);
+  if(!result) return;
+
+  const p = isMaster ? null : me();
+  const displayName = isMaster ? '✦ Mestre' : (p ? (p.charName||p.name||'Aventureiro') : 'Aventureiro');
+
+  const msg = {
+    type       : 'manualroll',
+    playerName : displayName,
+    playerId   : myId,
+    isMaster   : !!isMaster,
+    formula    : formula,
+    dice       : result.rolls,
+    total      : result.total,
+    ts         : Date.now()
+  };
+  if(firebaseOK && salaId){
+    db.ref('salas/'+salaId+'/chat').push(msg);
+  } else {
+    renderChatEntry('local-'+Date.now(), msg);
+  }
+}
+
+/* ── Custom roll ── */
+function showCustomRollUI(){
+  const r = $('chat-custom-row');
+  if(r){ r.style.display = r.style.display==='none'?'block':'none'; }
+}
+function hideCustomRollUI(){
+  const r = $('chat-custom-row'); if(r) r.style.display='none';
+}
+function sendCustomRoll(){
+  const inp = $('chat-custom-inp');
+  const formula = inp ? inp.value.trim() : '';
+  if(!formula) return;
+  chatRollDice(formula);
+  if(inp) inp.value='';
+  hideCustomRollUI();
+}
+
+/* ── Avaliar fórmula de dados (ex: 2d6+3, 1d20-1) ── */
+function evalDiceFormula(formula){
+  try{
+    const clean = formula.toLowerCase().replace(/\s/g,'');
+    // Parse: NdM[+/-K]
+    const m = clean.match(/^(\d+)d(\d+)([+-]\d+)?$/);
+    if(!m) return null;
+    const count  = Math.min(20, parseInt(m[1])||1);
+    const sides  = Math.min(1000, parseInt(m[2])||6);
+    const mod    = m[3] ? parseInt(m[3]) : 0;
+    const rolls  = [];
+    for(let i=0;i<count;i++) rolls.push(Math.floor(Math.random()*sides)+1);
+    const sum    = rolls.reduce((a,b)=>a+b,0) + mod;
+    return { rolls, total: sum, mod, sides };
+  }catch(e){ return null; }
+}
+
+/* ── Limpar chat localmente (sem apagar Firebase) ── */
+function clearChatLocal(){
+  chatRenderedIds.clear(); chatUnread=0; updateChatBadge();
+  const msgs=$('chat-msgs');
+  if(msgs) msgs.innerHTML='<p class="chat-empty" id="chat-empty">Chat limpo localmente.<br><span style="font-size:9px;opacity:.5;">Novas mensagens aparecerão aqui</span></p>';
+}
+
+/* ── Atualizar lista de sussurros ── */
+function updateWhisperTargets(){
+  const sel = $('chat-whisper-target');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">— jogador —</option>';
+  Object.entries(players).forEach(([pid,p])=>{
+    if(pid === myId || pid === masterUID) return;
+    const opt = document.createElement('option');
+    opt.value = pid;
+    opt.textContent = p.charName||p.name||'Jogador';
+    sel.appendChild(opt);
+  });
+  // Mestre pode sussurrar para jogadores; jogadores podem sussurrar para o mestre
+  if(!isMaster && masterUID){
+    const opt = document.createElement('option');
+    opt.value = masterUID;
+    opt.textContent = '✦ Mestre';
+    sel.appendChild(opt);
+  }
+}
+
+/* ── Renderizar uma entrada no chat ── */
 function renderChatEntry(msgId, msg){
   if(chatRenderedIds.has(msgId)) return;
   chatRenderedIds.add(msgId);
 
-  const empty = $('chat-empty');
-  if(empty) empty.style.display = 'none';
+  // Filtrar sussurros: só mostrar ao destinatário e ao remetente
+  if(msg.type==='whisper'){
+    const isMe = msg.playerId===myId || msg.whisperTo===myId;
+    if(!isMe && !isMaster) return;
+  }
 
-  const best = Math.max(...(msg.dice||[1]));
-  const entryClass = msg.resultClass === 'r-crit'
-    ? 'entry-crit'
-    : msg.resultClass === 'r-good'
-    ? 'entry-good' : '';
+  const empty=$('chat-empty'); if(empty) empty.style.display='none';
+  const time=new Date(msg.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const nameClass = msg.isMaster ? 'chat-player-name is-master' : 'chat-player-name';
 
-  const diceHTML = (msg.dice||[]).map(d=>{
-    const cls = d === 6 ? 'die-crit' : d === best ? 'die-hi' : '';
-    return `<div class="chat-die ${cls}">${d}</div>`;
-  }).join('');
+  const el=document.createElement('div');
 
-  const time = new Date(msg.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  if(msg.type==='roll'){
+    const best=Math.max(...(msg.dice||[1]));
+    const entryClass = msg.resultClass==='r-crit'?'entry-crit':msg.resultClass==='r-good'?'entry-good':'';
+    const diceHTML=(msg.dice||[]).map(d=>{
+      const cls=d===6?'die-crit':d===best?'die-hi':'';
+      return `<div class="chat-die ${cls}">${d}</div>`;
+    }).join('');
+    el.className='chat-entry '+entryClass;
+    el.innerHTML=`
+      <div class="chat-entry-top">
+        <span class="${nameClass}">${esc(msg.playerName)}</span>
+        <span class="chat-entry-time">${time}</span>
+      </div>
+      <div class="chat-skill-name">⚄ ${esc(msg.skillName)}</div>
+      <div class="chat-dice-row">${diceHTML}</div>
+      <div class="chat-result ${msg.resultClass||'r-norm'}">${esc(msg.resultText)}</div>`;
+  } else if(msg.type==='manualroll'){
+    const formula = msg.formula||'?';
+    const sides   = parseInt((formula.match(/d(\d+)/)||[,'6'])[1])||6;
+    const best    = Math.max(...(msg.dice||[1]));
+    const diceHTML=(msg.dice||[]).map(d=>{
+      const isCrit = d===sides;
+      const isHi   = !isCrit && d===best;
+      return `<div class="chat-die ${isCrit?'die-crit':isHi?'die-hi':''}">${d}</div>`;
+    }).join('');
+    const hasMod = msg.dice && msg.dice.length>0 && msg.total !== msg.dice.reduce((a,b)=>a+b,0);
+    el.className='chat-entry';
+    el.innerHTML=`
+      <div class="chat-entry-top">
+        <span class="${nameClass}">${esc(msg.playerName)}</span>
+        <span class="chat-entry-time">${time}</span>
+      </div>
+      <div class="chat-skill-name">🎲 ${esc(formula)}</div>
+      <div class="chat-dice-row">${diceHTML}</div>
+      <div class="chat-manual-roll">
+        <span class="chat-manual-formula">Total</span>
+        <span class="chat-manual-total">${msg.total}</span>
+      </div>`;
+  } else if(msg.type==='whisper'){
+    const direction = msg.playerId===myId ? `→ ${esc(msg.whisperName||'?')}` : `← ${esc(msg.playerName)}`;
+    el.className='chat-entry entry-whisper';
+    el.innerHTML=`
+      <div class="chat-entry-top">
+        <span class="${nameClass}">${esc(msg.playerName)}</span>
+        <span class="chat-entry-time">${time}</span>
+      </div>
+      <div class="chat-whisper-label">🤫 Sussurro ${direction}</div>
+      <div class="chat-text-body">${esc(msg.text)}</div>`;
+  } else if(msg.type==='system'){
+    el.className='chat-entry entry-system';
+    el.innerHTML=`
+      <div class="chat-entry-top">
+        <span style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;color:rgba(120,140,220,.6);">⚙ Sistema</span>
+        <span class="chat-entry-time">${time}</span>
+      </div>
+      <div class="chat-text-body" style="color:rgba(140,160,220,.65);font-size:12px;">${esc(msg.text)}</div>`;
+  } else {
+    // text
+    el.className='chat-entry entry-text';
+    el.innerHTML=`
+      <div class="chat-entry-top">
+        <span class="${nameClass}">${esc(msg.playerName)}</span>
+        <span class="chat-entry-time">${time}</span>
+      </div>
+      <div class="chat-text-body">${esc(msg.text)}</div>`;
+  }
 
-  const el = document.createElement('div');
-  el.className = 'chat-entry ' + entryClass;
-  el.innerHTML = `
-    <div class="chat-entry-top">
-      <span class="chat-player-name">${esc(msg.playerName)}</span>
-      <span class="chat-entry-time">${time}</span>
-    </div>
-    <div class="chat-skill-name">${esc(msg.skillName)}</div>
-    <div class="chat-dice-row">${diceHTML}</div>
-    <div class="chat-result ${msg.resultClass||'r-norm'}">${esc(msg.resultText)}</div>`;
-
-  const msgs = $('chat-msgs');
+  const msgs=$('chat-msgs');
   if(msgs){
     msgs.appendChild(el);
-    // Incrementar unread se painel fechado
-    if(!chatOpen){
-      chatUnread++;
-      updateChatBadge();
-    } else {
-      scrollChatToBottom();
-    }
+    if(!chatOpen){ chatUnread++; updateChatBadge(); }
+    else { scrollChatToBottom(); }
   }
 }
 
-/* Limpar chat ao entrar numa sala */
+/* ── Limpar ao entrar na sala ── */
 function clearChat(){
-  chatRenderedIds.clear();
-  chatUnread = 0;
-  updateChatBadge();
-  const msgs = $('chat-msgs');
-  if(msgs) msgs.innerHTML = '<p class="chat-empty" id="chat-empty">Nenhuma rolagem ainda...</p>';
-  const notice = $('chat-hidden-notice');
-  if(notice) notice.classList.remove('show');
+  chatRenderedIds.clear(); chatUnread=0; updateChatBadge();
+  const msgs=$('chat-msgs');
+  if(msgs) msgs.innerHTML='<p class="chat-empty" id="chat-empty">Nenhuma mensagem ainda...<br><span style="font-size:9px;opacity:.5;">Role dados ou envie uma mensagem</span></p>';
+  const notice=$('chat-hidden-notice'); if(notice) notice.classList.remove('show');
 }
 
-/* Ligar listener do chat */
+/* ── Ligar listener ── */
 function attachChatListener(){
   if(!firebaseOK || !salaId) return;
   clearChat();
+  updateWhisperTargets();
 
-  // Listener de visibilidade
-  chatSettListener = db.ref('salas/'+salaId+'/chatSettings/visible').on('value', snap => {
-    const v = snap.exists() ? snap.val() : true;
+  chatSettListener=db.ref('salas/'+salaId+'/chatSettings/visible').on('value',snap=>{
+    const v=snap.exists()?snap.val():true;
     updateChatVisUI(v);
   });
 
-  // Mostrar barra de controlo ao Mestre
-  const masterBar = $('chat-master-bar');
+  const masterBar=$('chat-master-bar');
   if(masterBar) masterBar.classList.toggle('show', isMaster);
 
-  // Se mestre: criar setting padrão (visível) se não existir
   if(isMaster){
     db.ref('salas/'+salaId+'/chatSettings/visible').once('value').then(s=>{
       if(!s.exists()) db.ref('salas/'+salaId+'/chatSettings/visible').set(true);
     });
   }
 
-  // Listener de mensagens — últimas 60
-  const chatRef = db.ref('salas/'+salaId+'/chat').limitToLast(60);
-  chatListener = chatRef.on('child_added', snap => {
-    const msg = snap.val();
+  const chatRef=db.ref('salas/'+salaId+'/chat').limitToLast(80);
+  chatListener=chatRef.on('child_added',snap=>{
+    const msg=snap.val();
     if(msg) renderChatEntry(snap.key, msg);
   });
+
+  // Mensagem de sistema ao entrar
+  const p = isMaster ? null : me();
+  const nm = isMaster ? '✦ Mestre' : (p?(p.charName||p.name||'Aventureiro'):'Aventureiro');
+  const systemMsg = { type:'system', text: nm+' entrou na sala.', ts:Date.now() };
+  db.ref('salas/'+salaId+'/chat').push(systemMsg);
 }
 
-/* Desligar listener */
+/* ── Desligar listener ── */
 function detachChatListener(){
-  if(chatListener && firebaseOK && salaId){
-    db.ref('salas/'+salaId+'/chat').off('child_added', chatListener);
-    chatListener = null;
+  if(chatListener&&firebaseOK&&salaId){
+    db.ref('salas/'+salaId+'/chat').off('child_added',chatListener);
+    chatListener=null;
   }
-  if(chatSettListener && firebaseOK && salaId){
-    db.ref('salas/'+salaId+'/chatSettings/visible').off('value', chatSettListener);
-    chatSettListener = null;
+  if(chatSettListener&&firebaseOK&&salaId){
+    db.ref('salas/'+salaId+'/chatSettings/visible').off('value',chatSettListener);
+    chatSettListener=null;
   }
 }
 
@@ -3851,7 +4258,12 @@ const secS = { background:"rgba(30,30,30,0.92)", border:"1px solid rgba(255,255,
 const lblS = { fontSize:10, color:"rgba(200,190,180,0.8)", textTransform:"uppercase", letterSpacing:"0.08em", userSelect:"none" };
 
 // ── GMToolbox ──
-function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken }) {
+function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken,
+  // GM Extras
+  initiative, setInitiative, pingActive, setPingActive,
+  showNotes, setShowNotes, sessionNotes, setSessionNotes,
+  measureActive, setMeasureActive, cellSize, measureResult
+}) {
   const fileRef = useRef(null);
   const tbtn = (id) => ({
     onClick:()=>setActiveTool(id),
@@ -3950,6 +4362,118 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
           <button onClick={onAddToken} style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>🎭 Adicionar Token</button>
         </div>
       </div>
+
+      {/* ══ FERRAMENTAS DO MESTRE ══ */}
+      
+      {/* Medidor de Distância */}
+      <div style={{ ...secS, borderColor: measureActive?"rgba(80,200,255,0.5)":"rgba(255,255,255,0.12)" }}>
+        <span style={lblS}>📏 Medidor de Distância</span>
+        <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+          <button onClick={()=>setMeasureActive(!measureActive)} style={{ padding:"5px 10px", borderRadius:6, cursor:"pointer", fontSize:12,
+            border:`1px solid ${measureActive?"rgba(80,200,255,0.8)":"rgba(255,255,255,0.12)"}`,
+            background:measureActive?"rgba(20,80,140,0.5)":"rgba(30,30,30,0.75)",
+            color:measureActive?"#80d0ff":"#e0ddd8" }}>
+            {measureActive?"🔵 Ativo":"Ativar"}
+          </button>
+          {measureResult && <span style={{ fontSize:11, color:"#80d0ff", fontFamily:"monospace" }}>{measureResult}</span>}
+        </div>
+        {measureActive && <span style={{ fontSize:10, color:"rgba(120,180,220,0.7)", fontStyle:"italic" }}>Clique: ponto A → B</span>}
+      </div>
+
+      {/* Ping */}
+      <div style={secS}>
+        <span style={lblS}>📍 Ping no Mapa</span>
+        <div style={{ display:"flex", gap:4 }}>
+          <button onClick={()=>setPingActive(!pingActive)} style={{ padding:"5px 10px", borderRadius:6, cursor:"pointer", fontSize:12,
+            border:`1px solid ${pingActive?"rgba(255,160,60,0.8)":"rgba(255,255,255,0.12)"}`,
+            background:pingActive?"rgba(140,60,10,0.5)":"rgba(30,30,30,0.75)",
+            color:pingActive?"#ffa040":"#e0ddd8" }}>
+            {pingActive?"🟠 Ativo":"Ativar"}
+          </button>
+        </div>
+        {pingActive && <span style={{ fontSize:10, color:"rgba(255,160,60,0.7)", fontStyle:"italic" }}>Clique no mapa para pingar</span>}
+      </div>
+
+      {/* Iniciativa */}
+      <div style={secS}>
+        <span style={lblS}>⚔ Ordem de Iniciativa</span>
+        <InitiativeTracker initiative={initiative} setInitiative={setInitiative} />
+      </div>
+
+      {/* Notas da Sessão */}
+      <div style={{ ...secS, borderColor: showNotes?"rgba(201,149,42,0.4)":"rgba(255,255,255,0.12)" }}>
+        <span style={lblS} onClick={()=>setShowNotes(!showNotes)} style={{ ...lblS, cursor:"pointer" }}>
+          📝 Notas da Sessão {showNotes?"▲":"▼"}
+        </span>
+        {showNotes && (
+          <textarea
+            value={sessionNotes}
+            onChange={(e)=>setSessionNotes(e.target.value)}
+            placeholder="Anote NPCs, locais, pistas, segredos..."
+            style={{ width:"100%", height:110, background:"rgba(10,6,2,0.8)", border:"1px solid rgba(201,149,42,0.25)", borderRadius:4, color:"rgba(244,234,208,0.8)", fontSize:12, padding:"6px 8px", resize:"vertical", outline:"none", fontFamily:"serif", lineHeight:1.5, boxSizing:"border-box" }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── InitiativeTracker ──
+function InitiativeTracker({ initiative, setInitiative }) {
+  const [name, setName] = React.useState("");
+  const [roll, setRoll] = React.useState("");
+  const [current, setCurrent] = React.useState(0);
+
+  const addEntry = () => {
+    const n = name.trim(); if(!n) return;
+    const r = parseInt(roll)||0;
+    setInitiative(prev => [...prev, { id:`ini-${Date.now()}`, name:n, roll:r }]
+      .sort((a,b)=>b.roll-a.roll));
+    setName(""); setRoll("");
+  };
+
+  const removeEntry = (id) => setInitiative(prev=>prev.filter(e=>e.id!==id));
+  const nextTurn = () => setCurrent(c => (c+1) % Math.max(1,initiative.length));
+  const clearAll = () => { setInitiative([]); setCurrent(0); };
+  const rollAll  = () => setInitiative(prev =>
+    prev.map(e=>({...e, roll:Math.floor(Math.random()*6)+1})).sort((a,b)=>b.roll-a.roll)
+  );
+
+  const inpS = { background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:4, padding:"4px 6px", color:"#e0ddd8", fontSize:12, outline:"none" };
+  const btnS = (color="#4a90d9") => ({ padding:"4px 8px", borderRadius:4, border:`1px solid ${color}40`, background:`${color}22`, color, cursor:"pointer", fontSize:11, fontWeight:600 });
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+      {/* List */}
+      {initiative.length===0 && <span style={{ fontSize:11, color:"rgba(200,180,140,0.4)", fontStyle:"italic" }}>Nenhum combatente ainda.</span>}
+      {initiative.map((e,i)=>(
+        <div key={e.id} style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 6px", borderRadius:4,
+          background:i===current?"rgba(201,149,42,0.18)":"rgba(255,255,255,0.04)",
+          border:`1px solid ${i===current?"rgba(201,149,42,0.5)":"rgba(255,255,255,0.08)"}` }}>
+          <span style={{ fontFamily:"monospace", fontSize:13, fontWeight:700, color:"#d4af37", minWidth:22, textAlign:"center" }}>{e.roll}</span>
+          <span style={{ flex:1, fontSize:12, color:i===current?"#f5d07a":"#c8c0b0", fontWeight:i===current?700:400 }}>
+            {i===current?"▶ ":""}{e.name}
+          </span>
+          <button onClick={()=>removeEntry(e.id)} style={{ background:"transparent", border:"none", color:"rgba(200,80,80,0.6)", cursor:"pointer", fontSize:12, padding:"1px 4px" }}>✕</button>
+        </div>
+      ))}
+      {/* Controls */}
+      {initiative.length>0 && (
+        <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:2 }}>
+          <button onClick={nextTurn} style={btnS("#80d080")}>▶ Próximo</button>
+          <button onClick={rollAll}  style={btnS("#d4af37")}>🎲 Rerrolar</button>
+          <button onClick={clearAll} style={btnS("#e08080")}>🗑 Limpar</button>
+        </div>
+      )}
+      {/* Add */}
+      <div style={{ display:"flex", gap:4, marginTop:2 }}>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nome..." style={{...inpS, flex:1}}
+          onKeyDown={e=>e.key==='Enter'&&addEntry()} />
+        <input value={roll} onChange={e=>setRoll(e.target.value)} placeholder="d6" type="number" min="1" max="6"
+          style={{...inpS, width:38, textAlign:"center" }} onKeyDown={e=>e.key==='Enter'&&addEntry()} />
+        <button onClick={()=>{ setRoll(String(Math.floor(Math.random()*6)+1)); }} style={{...btnS("#d4af37"),padding:"4px 6px"}} title="Rolar d6">🎲</button>
+        <button onClick={addEntry} style={btnS("#4a90d9")}>+</button>
+      </div>
     </div>
   );
 }
@@ -4021,6 +4545,16 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
   const { tokens, addToken, updateToken, removeToken } = useTokens();
   const [showTokenModal, setShowTokenModal] = useState(false);
 
+  // GM Extras
+  const [initiative, setInitiative]     = useState([]);
+  const [pingActive, setPingActive]     = useState(false);
+  const [pings, setPings]               = useState([]);
+  const [showNotes, setShowNotes]       = useState(false);
+  const [sessionNotes, setSessionNotes] = useState('');
+  const [measureActive, setMeasureActive] = useState(false);
+  const [measurePoints, setMeasurePoints] = useState([]);
+  const [measureResult, setMeasureResult] = useState(null);
+
   useKeyboard(isPanMode, setIsPanModeSync, permissions, setActiveTool, undoLast);
 
   // ResizeObserver para dimensionar o canvas ao container real
@@ -4055,8 +4589,33 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
   const handleClick = useCallback((e) => {
     if(isPanMode||isPanning.current) return;
     if(permissions.canEdit&&(activeTool==="draw"||activeTool==="fog")) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const wx = (e.clientX - rect.left - camera.x) / camera.scale;
+    const wy = (e.clientY - rect.top  - camera.y) / camera.scale;
+
+    // Ping
+    if(permissions.isGM && pingActive){
+      const id = `ping-${Date.now()}`;
+      setPings(prev=>[...prev,{id,x:wx,y:wy,born:Date.now()}]);
+      setTimeout(()=>setPings(prev=>prev.filter(p=>p.id!==id)),2200);
+      return;
+    }
+
+    // Medidor de distância
+    if(permissions.isGM && measureActive){
+      setMeasurePoints(prev=>{
+        if(prev.length===0) return [{x:wx,y:wy}];
+        const dx=(wx-prev[0].x)/cellSize, dy=(wy-prev[0].y)/cellSize;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        setMeasureResult(`${dist.toFixed(1)} células`);
+        return [];
+      });
+      return;
+    }
+
     if(!permissions.canEdit){ setShowRO(true); setTimeout(()=>setShowRO(false),1800); }
-  }, [permissions.canEdit, activeTool, isPanMode, isPanning]);
+  }, [permissions, activeTool, isPanMode, isPanning, camera, pingActive, measureActive, cellSize]);
 
   const handleFillFog = useCallback(() => {
     const cols = mapTransform ? Math.ceil(mapTransform.x+mapTransform.w+5) : 40;
@@ -4068,12 +4627,16 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
     if (isPanning.current) return;
     if (isPanMode) {
       setCursorStyle("grab");
+    } else if (permissions.isGM && pingActive) {
+      setCursorStyle("crosshair");
+    } else if (permissions.isGM && measureActive) {
+      setCursorStyle("crosshair");
     } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog")) {
       setCursorStyle("none");
     } else {
       setCursorStyle("default");
     }
-  }, [isPanMode, activeTool, permissions.canEdit]);
+  }, [isPanMode, activeTool, permissions, pingActive, measureActive]);
 
   const wt = `translate(${camera.x},${camera.y}) scale(${camera.scale})`;
 
@@ -4100,6 +4663,22 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
           <MapImageLayer mapTransform={mapTransform} cellSize={cellSize} cameraScale={camera.scale} canEdit={permissions.canEdit} onUpdate={updateMapTransform} />
         </g>
       </svg>
+
+      {/* Pings overlay */}
+      {pings.map(ping=>(
+        <div key={ping.id} style={{ position:"absolute", left:ping.x*camera.scale+camera.x-20, top:ping.y*camera.scale+camera.y-20, width:40, height:40, pointerEvents:"none", zIndex:25 }}>
+          <div style={{ width:"100%",height:"100%",borderRadius:"50%",border:"3px solid rgba(255,160,30,0.9)",animation:"pingAnim 2s ease-out forwards" }} />
+          <div style={{ position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:8,height:8,borderRadius:"50%",background:"rgba(255,200,50,0.9)" }} />
+        </div>
+      ))}
+
+      {/* Measure line */}
+      {measurePoints.length===1 && (
+        <svg style={{ position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:24 }}>
+          <circle cx={measurePoints[0].x*camera.scale+camera.x} cy={measurePoints[0].y*camera.scale+camera.y} r={6} fill="rgba(80,200,255,0.8)" />
+          <text x={measurePoints[0].x*camera.scale+camera.x+10} y={measurePoints[0].y*camera.scale+camera.y-8} fill="rgba(80,200,255,0.9)" fontSize={12} fontFamily="monospace">Ponto A</text>
+        </svg>
+      )}
 
       <DrawingLayer paths={paths} camera={camera} width={size.width} height={size.height} />
 
@@ -4130,7 +4709,14 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
           onMapUpload={loadMap}         onMapClear={clearMap}         hasMap={!!mapTransform}
           onUndoDraw={undoLast}         onClearDraw={clearAll}
           onClearFog={clearFog}         onFillFog={handleFillFog}
-          onAddToken={()=>setShowTokenModal(true)} />
+          onAddToken={()=>setShowTokenModal(true)}
+          initiative={initiative}       setInitiative={setInitiative}
+          pingActive={pingActive}       setPingActive={setPingActive}
+          showNotes={showNotes}         setShowNotes={setShowNotes}
+          sessionNotes={sessionNotes}   setSessionNotes={setSessionNotes}
+          measureActive={measureActive} setMeasureActive={setMeasureActive}
+          cellSize={cellSize}           measureResult={measureResult}
+        />
       )}
 
       {showTokenModal && permissions.canEdit && (
