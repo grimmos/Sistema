@@ -5109,6 +5109,9 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
       color:danger?"#f0a090":"#b0aaa4" }
   });
   const [collapsed, setCollapsed] = React.useState(false);
+  // Verifica window.isMaster diretamente — sem depender de props ou estado externo
+  const isMasterNow = window.isMaster === true || window.debugGM === true;
+  if (!isMasterNow) return null;
   return (
     <div style={{ position:"absolute", top:12, left:12, display:"flex", flexDirection:"column", gap:6, zIndex:20, maxHeight:"calc(100% - 80px)", overflowY:"auto", alignItems:"flex-start" }}>
       {/* Botão colapsar */}
@@ -5456,7 +5459,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
       return;
     }
     if(permissions.canEdit&&(activeTool==="draw"||activeTool==="fog"||activeTool==="terrain"||activeTool==="measure")) return;
-    if(!permissions.canEdit){ setShowRO(true); setTimeout(()=>setShowRO(false),1800); }
+    if(!permissions.canEdit && window.isMaster !== true && !window.debugGM){ setShowRO(true); setTimeout(()=>setShowRO(false),1800); }
   }, [permissions.canEdit, activeTool, isPanMode, isPanning, camera, cellSize, addPing]);
 
   const handleFillFog = useCallback(() => {
@@ -5545,8 +5548,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
       <RoleBadge role={role} />
       <CameraControls camera={camera} setCamera={setCamera} />
 
-            {(permissions.canEdit || window.debugGM) && (
-        <GMToolbox
+            <GMToolbox
           activeTool={activeTool}       setActiveTool={setActiveTool}
           brushColor={brushColor}       setBrushColor={setBrushColor}
           brushSize={brushSize}         setBrushSize={setBrushSize}
@@ -5562,9 +5564,8 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
           showGrid={showGrid}           setShowGrid={setShowGrid}
           onToggleFullScreen={toggleFullScreen}
         />
-      )}
 
-      {showTokenModal && (permissions.canEdit || window.debugGM) && (
+      {showTokenModal && (window.isMaster === true || window.debugGM === true) && (
         <AddTokenModal onAdd={addToken} onClose={()=>setShowTokenModal(false)} />
       )}
 
