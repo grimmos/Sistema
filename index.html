@@ -4254,166 +4254,471 @@ function AddTokenModal({ onAdd, onClose }) {
 }
 
 // ── Styles ──
-const secS = { background:"rgba(30,30,30,0.92)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:8, padding:"6px 8px", display:"flex", flexDirection:"column", gap:5, backdropFilter:"blur(8px)", boxShadow: "0 4px 15px rgba(0,0,0,0.4)" };
-const lblS = { fontSize:10, color:"rgba(200,190,180,0.8)", textTransform:"uppercase", letterSpacing:"0.08em", userSelect:"none" };
+const secS = { background:"rgba(22,16,8,0.96)", border:"1px solid rgba(201,149,42,0.2)", borderRadius:8, padding:"7px 9px", display:"flex", flexDirection:"column", gap:5, backdropFilter:"blur(10px)", boxShadow: "0 4px 20px rgba(0,0,0,0.6)" };
+const lblS = { fontSize:9, color:"rgba(201,149,42,0.65)", textTransform:"uppercase", letterSpacing:"0.12em", userSelect:"none", fontFamily:"'Cinzel',serif" };
 
-// ── GMToolbox ──
-function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken,
-  // GM Extras
-  initiative, setInitiative, pingActive, setPingActive,
-  showNotes, setShowNotes, sessionNotes, setSessionNotes,
-  measureActive, setMeasureActive, cellSize, measureResult
-}) {
-  const fileRef = useRef(null);
-  const tbtn = (id) => ({
-    onClick:()=>setActiveTool(id),
-    style:{ padding:"5px 10px", borderRadius:6, cursor:"pointer", fontSize:12, userSelect:"none", whiteSpace:"nowrap",
-      border:`1px solid ${activeTool===id?(id==="fog"?"rgba(160,80,255,0.8)":"rgba(80,180,255,0.8)"):"rgba(255,255,255,0.12)"}`,
-      background:activeTool===id?(id==="fog"?"rgba(80,20,140,0.5)":"rgba(40,120,220,0.35)"):"rgba(30,30,30,0.75)",
-      color:activeTool===id?(id==="fog"?"#d8b4fe":"#e0ddd8"):"#e0ddd8" }
-  });
-  const abtn = (onClick,danger=false) => ({
-    onClick, style:{ padding:"5px 10px", borderRadius:6, cursor:"pointer", fontSize:12,
-      border:`1px solid ${danger?"rgba(220,60,40,0.5)":"rgba(255,255,255,0.12)"}`,
-      background:danger?"rgba(180,40,20,0.3)":"rgba(30,30,30,0.75)",
-      color:danger?"#f0a090":"#b0aaa4" }
-  });
+// ── ToolSection colapsável ──
+function ToolSection({ label, icon, children, defaultOpen=true, accent=false }) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  const borderColor = accent ? "rgba(201,149,42,0.45)" : "rgba(201,149,42,0.18)";
+  const bg = accent ? "rgba(35,22,6,0.98)" : "rgba(22,16,8,0.96)";
   return (
-    <div style={{ position:"absolute", top:12, left:12, display:"flex", flexDirection:"column", gap:6, zIndex:20, maxHeight:"calc(100% - 80px)", overflowY:"auto" }}>
-      {/* Ferramentas */}
-      <div style={secS}>
-        <span style={lblS}>Ferramenta</span>
-        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-          <button {...tbtn("select")}>↖ Mover</button>
-          <button {...tbtn("draw")}>✏ Caneta</button>
-          <button {...tbtn("fog")}>🌫 Névoa</button>
-        </div>
+    <div style={{ ...secS, borderColor, background:bg, padding:0, overflow:"hidden" }}>
+      <div onClick={()=>setOpen(!open)}
+        style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 10px", cursor:"pointer", userSelect:"none", borderBottom: open ? `1px solid ${borderColor}` : "none" }}>
+        <span style={{ ...lblS, color: accent ? "rgba(201,149,42,0.85)" : "rgba(201,149,42,0.6)", display:"flex", alignItems:"center", gap:5 }}>
+          <span style={{ fontSize:12 }}>{icon}</span> {label}
+        </span>
+        <span style={{ fontSize:9, color:"rgba(201,149,42,0.4)", transition:"transform .2s", display:"block", transform: open?"rotate(180deg)":"rotate(0deg)" }}>▼</span>
       </div>
-      {/* Mapa */}
-      <div style={secS}>
-        <span style={lblS}>Mapa de Fundo</span>
-        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-          <button onClick={()=>fileRef.current?.click()} style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>📂 Carregar imagem</button>
-          {hasMap && <button {...abtn(onMapClear,true)}>🗑 Remover</button>}
-          <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={(e)=>{ onMapUpload(e.target.files[0]); e.target.value=""; }} />
+      {open && <div style={{ padding:"7px 9px", display:"flex", flexDirection:"column", gap:5 }}>{children}</div>}
+    </div>
+  );
+}
+
+// ── Botão de ferramenta principal (icon + label) ──
+function ToolBtn({ active, onClick, icon, label, color="#50b4ff", danger=false }) {
+  const ac = danger ? "#f09080" : color;
+  return (
+    <button onClick={onClick} style={{
+      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      padding:"6px 0", flex:"1", borderRadius:6, cursor:"pointer", userSelect:"none", border:"none",
+      background: active ? `${ac}22` : "rgba(255,255,255,0.03)",
+      outline: active ? `1.5px solid ${ac}` : "1.5px solid rgba(255,255,255,0.06)",
+      color: active ? ac : (danger ? "#e0907a" : "#c0b8b0"), transition:"all .15s",
+      minWidth:40
+    }}>
+      <span style={{ fontSize:16, lineHeight:1 }}>{icon}</span>
+      <span style={{ fontSize:8, marginTop:3, letterSpacing:"0.05em", fontFamily:"'Cinzel',serif", opacity:0.8 }}>{label}</span>
+    </button>
+  );
+}
+
+// ── Chat do Mapa (painel lateral flutuante) ──
+function MapChatPanel({ mapChatOpen, setMapChatOpen, role }) {
+  const [msgs, setMsgs] = React.useState([]);
+  const [input, setInput] = React.useState("");
+  const [unread, setUnread] = React.useState(0);
+  const endRef = useRef(null);
+  const isGM = role === "GM";
+
+  // Conectar ao chat Firebase global (mesmo canal do chat principal)
+  React.useEffect(() => {
+    if (typeof window.db === "undefined" || !window.salaId) return;
+    const ref = window.db.ref('salas/'+window.salaId+'/chat').limitToLast(60);
+    const handler = ref.on('child_added', snap => {
+      const msg = snap.val(); if(!msg) return;
+      setMsgs(prev => [...prev, { ...msg, key: snap.key }]);
+      if (!mapChatOpen) setUnread(u => u+1);
+    });
+    return () => ref.off('child_added', handler);
+  }, [window.salaId]);
+
+  React.useEffect(() => {
+    if (mapChatOpen) { setUnread(0); setTimeout(()=>endRef.current?.scrollIntoView({behavior:"smooth"}),60); }
+  }, [mapChatOpen, msgs]);
+
+  const send = () => {
+    const txt = input.trim(); if(!txt) return; setInput("");
+    const p = window.isMaster ? null : (window.players && window.players[window.myId]);
+    const name = window.isMaster ? "✦ Mestre" : (p ? (p.charName||p.name||"Aventureiro") : "Aventureiro");
+    const msg = { type:"text", playerName:name, playerId:window.myId, isMaster:!!window.isMaster, text:txt, ts:Date.now() };
+    if (typeof window.db !== "undefined" && window.salaId) {
+      window.db.ref('salas/'+window.salaId+'/chat').push(msg);
+    } else {
+      setMsgs(prev=>[...prev,{...msg,key:'local-'+Date.now()}]);
+    }
+  };
+
+  const rollDice = (formula) => {
+    if (typeof window.chatRollDice === "function") { window.chatRollDice(formula); return; }
+    const m = formula.toLowerCase().match(/^(\d+)d(\d+)([+-]\d+)?$/);
+    if(!m) return;
+    const count=Math.min(10,parseInt(m[1])||1), sides=parseInt(m[2])||6, mod=m[3]?parseInt(m[3]):0;
+    const rolls=[]; for(let i=0;i<count;i++) rolls.push(Math.floor(Math.random()*sides)+1);
+    const total=rolls.reduce((a,b)=>a+b,0)+mod;
+    const p = window.isMaster ? null : (window.players && window.players[window.myId]);
+    const name = window.isMaster ? "✦ Mestre" : (p?(p.charName||p.name||"Aventureiro"):"Aventureiro");
+    const msg = { type:"manualroll", playerName:name, playerId:window.myId, isMaster:!!window.isMaster, formula, dice:rolls, total, ts:Date.now() };
+    if (typeof window.db !== "undefined" && window.salaId) window.db.ref('salas/'+window.salaId+'/chat').push(msg);
+    else setMsgs(prev=>[...prev,{...msg,key:'local-'+Date.now()}]);
+  };
+
+  const renderMsg = (msg) => {
+    const time = new Date(msg.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    const nameColor = msg.isMaster ? "#e08080" : "#c9952a";
+    const bg = msg.type==='roll'||msg.type==='manualroll' ? "rgba(255,255,255,0.04)" : "transparent";
+    if (msg.type==='roll' || msg.type==='manualroll') {
+      const dice = msg.dice||[];
+      const best = Math.max(...dice,0);
+      const sides = msg.type==='manualroll' ? parseInt((msg.formula||'d6').match(/d(\d+)/)?.[1]||6) : 6;
+      return (
+        <div key={msg.key} style={{ padding:"6px 8px", borderRadius:5, background:"rgba(201,149,42,0.07)", border:"1px solid rgba(201,149,42,0.15)", marginBottom:3 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+            <span style={{ fontSize:10, color:nameColor, fontFamily:"'Cinzel',serif", fontWeight:700 }}>{msg.playerName}</span>
+            <span style={{ fontSize:9, color:"rgba(200,190,180,0.35)" }}>{time}</span>
+          </div>
+          <div style={{ fontSize:10, color:"rgba(200,160,60,0.7)", marginBottom:4 }}>
+            {msg.type==='roll' ? `⚄ ${msg.skillName}` : `🎲 ${msg.formula}`}
+          </div>
+          <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginBottom:4 }}>
+            {dice.map((d,i)=>{
+              const isCrit = d===sides||d===6;
+              const isHi = !isCrit && d===best;
+              return <span key={i} style={{ width:22,height:22,borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,
+                background:isCrit?"rgba(201,149,42,0.4)":isHi?"rgba(80,180,80,0.25)":"rgba(255,255,255,0.06)",
+                border:`1px solid ${isCrit?"rgba(201,149,42,0.7)":isHi?"rgba(80,200,80,0.4)":"rgba(255,255,255,0.1)"}`,
+                color:isCrit?"#f0d060":isHi?"#80d080":"#c0b8b0" }}>{d}</span>;
+            })}
+          </div>
+          {msg.type==='manualroll' && <div style={{ fontSize:12, fontWeight:700, color:"#d4af37", textAlign:"right" }}>= {msg.total}</div>}
+          {msg.type==='roll' && msg.resultText && <div style={{ fontSize:11, color:msg.resultClass==='r-crit'?"#f0d060":msg.resultClass==='r-good'?"#80d080":"#c0b8b0", textAlign:"right", fontFamily:"'Cinzel',serif" }}>{msg.resultText}</div>}
         </div>
-        {!hasMap && <span style={{ fontSize:11, color:"rgba(201,149,42,0.5)", fontStyle:"italic" }}>Arraste o mapa para posicionar</span>}
+      );
+    }
+    if (msg.type==='whisper') return (
+      <div key={msg.key} style={{ padding:"5px 8px", borderRadius:5, background:"rgba(100,60,160,0.12)", border:"1px solid rgba(140,80,220,0.2)", marginBottom:3 }}>
+        <div style={{ display:"flex", justifyContent:"space-between" }}>
+          <span style={{ fontSize:10, color:"#b070e0", fontFamily:"'Cinzel',serif" }}>{msg.playerName}</span>
+          <span style={{ fontSize:9, color:"rgba(200,190,180,0.35)" }}>{time}</span>
+        </div>
+        <div style={{ fontSize:10, color:"rgba(180,140,220,0.8)", marginTop:1 }}>🤫 {msg.text}</div>
       </div>
-      {/* Caneta */}
-      {activeTool==="draw" && <>
-        <div style={secS}>
-          <span style={lblS}>Cor</span>
-          <div style={{ display:"flex", flexWrap:"wrap", gap:4, maxWidth:150 }}>
-            {DRAW_COLORS.map(({value,label})=>(
-              <button key={value} title={label} onClick={()=>setBrushColor(value)} style={{ width:20,height:20,borderRadius:"50%",background:value,padding:0,cursor:"pointer",border:brushColor===value?"2px solid rgba(80,180,255,0.9)":"2px solid rgba(255,255,255,0.15)" }} />
-            ))}
+    );
+    if (msg.type==='system') return (
+      <div key={msg.key} style={{ padding:"3px 6px", textAlign:"center", marginBottom:2 }}>
+        <span style={{ fontSize:9, color:"rgba(120,140,200,0.5)", fontStyle:"italic" }}>⚙ {msg.text}</span>
+      </div>
+    );
+    return (
+      <div key={msg.key} style={{ padding:"5px 8px", borderRadius:5, background:bg, marginBottom:2 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:1 }}>
+          <span style={{ fontSize:10, color:nameColor, fontFamily:"'Cinzel',serif", fontWeight:700 }}>{msg.playerName}</span>
+          <span style={{ fontSize:9, color:"rgba(200,190,180,0.35)" }}>{time}</span>
+        </div>
+        <div style={{ fontSize:12, color:"rgba(244,234,208,0.75)", lineHeight:1.4 }}>{msg.text}</div>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      {/* Botão flutuante para abrir chat do mapa */}
+      <div onClick={()=>setMapChatOpen(!mapChatOpen)} style={{
+        position:"absolute", bottom:60, right:14, zIndex:30,
+        width:42, height:42, borderRadius:10, cursor:"pointer",
+        background: mapChatOpen ? "rgba(201,149,42,0.25)" : "rgba(22,16,8,0.92)",
+        border:`1.5px solid ${mapChatOpen?"rgba(201,149,42,0.7)":"rgba(201,149,42,0.3)"}`,
+        boxShadow:"0 4px 16px rgba(0,0,0,0.6)",
+        display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column",
+        transition:"all .2s"
+      }}>
+        <span style={{ fontSize:18 }}>💬</span>
+        {unread>0 && !mapChatOpen && (
+          <span style={{ position:"absolute",top:-5,right:-5,minWidth:16,height:16,borderRadius:8,background:"#c0321a",border:"1.5px solid #1a1008",fontSize:9,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",fontFamily:"'Cinzel',serif" }}>{unread}</span>
+        )}
+        <span style={{ fontSize:7, color:"rgba(201,149,42,0.6)", fontFamily:"'Cinzel',serif", letterSpacing:"0.05em" }}>CHAT</span>
+      </div>
+
+      {/* Painel do Chat */}
+      {mapChatOpen && (
+        <div style={{
+          position:"absolute", top:0, right:0, width:300, height:"100%", zIndex:28,
+          background:"rgba(12,8,3,0.97)", borderLeft:"1px solid rgba(201,149,42,0.22)",
+          display:"flex", flexDirection:"column", boxShadow:"-6px 0 30px rgba(0,0,0,0.7)",
+          backdropFilter:"blur(6px)"
+        }}>
+          {/* Header */}
+          <div style={{ padding:"10px 12px 9px", borderBottom:"1px solid rgba(201,149,42,0.15)", background:"linear-gradient(90deg,rgba(25,15,4,0.95),rgba(35,22,6,0.95))", flexShrink:0 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <span style={{ fontFamily:"'Cinzel',serif", fontSize:11, letterSpacing:"3px", color:"rgba(201,149,42,0.85)", textTransform:"uppercase" }}>✦ Chat da Partida</span>
+              <button onClick={()=>setMapChatOpen(false)} style={{ background:"transparent", border:"none", color:"rgba(201,149,42,0.4)", fontSize:14, cursor:"pointer", padding:"2px 6px" }}>✕</button>
+            </div>
+          </div>
+          {/* Rolagens rápidas */}
+          <div style={{ padding:"6px 10px", borderBottom:"1px solid rgba(201,149,42,0.1)", flexShrink:0 }}>
+            <div style={{ fontSize:8, color:"rgba(201,149,42,0.45)", fontFamily:"'Cinzel',serif", letterSpacing:"0.1em", marginBottom:4 }}>ROLAR RÁPIDO</div>
+            <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+              {["1d6","2d6","3d6","1d20","1d4","1d8"].map(f=>(
+                <button key={f} onClick={()=>rollDice(f)} style={{ padding:"3px 7px", borderRadius:4, border:"1px solid rgba(201,149,42,0.2)", background:"rgba(201,149,42,0.05)", color:"rgba(201,149,42,0.7)", cursor:"pointer", fontSize:10, fontFamily:"monospace", transition:"all .15s" }}>
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Mensagens */}
+          <div style={{ flex:1, overflowY:"auto", padding:"8px 8px 4px", display:"flex", flexDirection:"column",
+            scrollbarWidth:"thin", scrollbarColor:"rgba(201,149,42,0.2) transparent" }}>
+            {msgs.length===0 && <p style={{ fontSize:11, color:"rgba(201,149,42,0.25)", fontStyle:"italic", textAlign:"center", marginTop:20 }}>Nenhuma mensagem ainda...<br/><span style={{fontSize:9,opacity:.6}}>Role dados ou envie uma mensagem</span></p>}
+            {msgs.map(renderMsg)}
+            <div ref={endRef} />
+          </div>
+          {/* Input */}
+          <div style={{ padding:"8px 10px", borderTop:"1px solid rgba(201,149,42,0.15)", background:"rgba(16,10,3,0.9)", flexShrink:0 }}>
+            <div style={{ display:"flex", gap:6 }}>
+              <input value={input} onChange={e=>setInput(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } }}
+                placeholder="Mensagem ou /r 2d6..."
+                style={{ flex:1, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(201,149,42,0.2)", borderRadius:5, padding:"6px 9px", color:"rgba(244,234,208,0.85)", fontSize:12, outline:"none", fontFamily:"serif" }} />
+              <button onClick={send} style={{ padding:"6px 10px", borderRadius:5, border:"1px solid rgba(201,149,42,0.4)", background:"rgba(201,149,42,0.12)", color:"rgba(201,149,42,0.9)", cursor:"pointer", fontSize:13 }}>➤</button>
+            </div>
           </div>
         </div>
-        <div style={secS}>
-          <span style={lblS}>Espessura</span>
-          <div style={{ display:"flex", gap:4 }}>
+      )}
+    </>
+  );
+}
+
+// ── AreaMarkers ──
+const AREA_SHAPES = [
+  { id:"circle",  icon:"⭕", label:"Círculo" },
+  { id:"square",  icon:"⬜", label:"Quadrado" },
+  { id:"cone",    icon:"△",  label:"Cone" },
+  { id:"line",    icon:"━",  label:"Linha" },
+];
+const AREA_COLORS = ["#e05252","#52c47a","#5278e0","#e09a3a","#d4c84a","#9a52e0"];
+
+function AreaMarkersLayer({ markers, camera, cellSize }) {
+  return (
+    <svg style={{ position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:11 }}>
+      {markers.map(m => {
+        const cx = m.cx*cellSize*camera.scale + camera.x;
+        const cy = m.cy*cellSize*camera.scale + camera.y;
+        const r  = m.r*cellSize*camera.scale;
+        const alpha = 0.22;
+        const stroke = m.color;
+        const fill   = m.color.replace(/^#/,'') ;
+        if (m.shape==='circle') return (
+          <g key={m.id}>
+            <circle cx={cx} cy={cy} r={r} fill={`${m.color}38`} stroke={stroke} strokeWidth={1.5} strokeDasharray="6 3" />
+            <text x={cx} y={cy+3} textAnchor="middle" fill={stroke} fontSize={Math.max(10,r*0.28)} fontFamily="serif" opacity={0.85}>{m.label||""}</text>
+          </g>
+        );
+        if (m.shape==='square') {
+          const s = r*1.6;
+          return (
+            <g key={m.id}>
+              <rect x={cx-s/2} y={cy-s/2} width={s} height={s} fill={`${m.color}38`} stroke={stroke} strokeWidth={1.5} strokeDasharray="6 3" />
+              <text x={cx} y={cy+3} textAnchor="middle" fill={stroke} fontSize={Math.max(10,s*0.18)} fontFamily="serif" opacity={0.85}>{m.label||""}</text>
+            </g>
+          );
+        }
+        if (m.shape==='cone') {
+          const angle = (m.angle||0)*Math.PI/180;
+          const spread = (m.spread||60)*Math.PI/180;
+          const a1 = angle - spread/2, a2 = angle + spread/2;
+          const x1 = cx + r*Math.cos(a1), y1 = cy + r*Math.sin(a1);
+          const x2 = cx + r*Math.cos(a2), y2 = cy + r*Math.sin(a2);
+          return (
+            <g key={m.id}>
+              <path d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 0,1 ${x2},${y2} Z`} fill={`${m.color}38`} stroke={stroke} strokeWidth={1.5} strokeDasharray="6 3" />
+            </g>
+          );
+        }
+        if (m.shape==='line') {
+          const angle = (m.angle||0)*Math.PI/180;
+          const ex = cx + r*2*Math.cos(angle), ey = cy + r*2*Math.sin(angle);
+          const w = Math.max(6, r*0.4);
+          return (
+            <g key={m.id}>
+              <line x1={cx} y1={cy} x2={ex} y2={ey} stroke={stroke} strokeWidth={w} strokeOpacity={0.35} strokeLinecap="round" />
+              <line x1={cx} y1={cy} x2={ex} y2={ey} stroke={stroke} strokeWidth={2} strokeOpacity={0.85} strokeLinecap="round" strokeDasharray="8 4" />
+            </g>
+          );
+        }
+        return null;
+      })}
+    </svg>
+  );
+}
+
+// ── GMToolbox (redesenhado) ──
+function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken,
+  initiative, setInitiative, pingActive, setPingActive,
+  showNotes, setShowNotes, sessionNotes, setSessionNotes,
+  measureActive, setMeasureActive, cellSize, measureResult,
+  areaMarkers, setAreaMarkers, mapChatOpen
+}) {
+  const fileRef = useRef(null);
+  const [collapsed, setCollapsed] = React.useState(false);
+  // Area marker state
+  const [areaShape, setAreaShape] = React.useState("circle");
+  const [areaColor, setAreaColor] = React.useState(AREA_COLORS[0]);
+  const [areaRadius, setAreaRadius] = React.useState(3);
+  const [areaLabel, setAreaLabel] = React.useState("");
+  const [areaAngle, setAreaAngle] = React.useState(0);
+
+  const addAreaMarker = () => {
+    const marker = { id:`area-${Date.now()}`, shape:areaShape, color:areaColor, r:areaRadius, cx:5, cy:5, label:areaLabel, angle:areaAngle, spread:60 };
+    setAreaMarkers(prev=>[...prev,marker]);
+  };
+  const clearAreaMarkers = () => setAreaMarkers([]);
+
+  if (collapsed) return (
+    <div style={{ position:"absolute", top:12, left:12, zIndex:20 }}>
+      <button onClick={()=>setCollapsed(false)} title="Abrir ferramentas" style={{
+        width:38, height:38, borderRadius:8, border:"1.5px solid rgba(201,149,42,0.45)",
+        background:"rgba(22,16,8,0.96)", color:"rgba(201,149,42,0.85)", cursor:"pointer", fontSize:18,
+        display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 14px rgba(0,0,0,0.6)"
+      }}>⚙</button>
+    </div>
+  );
+
+  return (
+    <div style={{
+      position:"absolute", top:12, left:12, display:"flex", flexDirection:"column", gap:5, zIndex:20,
+      maxHeight:"calc(100% - 70px)", overflowY:"auto", overflowX:"visible",
+      width:188,
+      scrollbarWidth:"thin", scrollbarColor:"rgba(201,149,42,0.15) transparent"
+    }}>
+      {/* Header da toolbar */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"5px 8px",
+        background:"rgba(22,16,8,0.98)", border:"1.5px solid rgba(201,149,42,0.45)", borderRadius:8,
+        boxShadow:"0 4px 18px rgba(0,0,0,0.65)" }}>
+        <span style={{ fontFamily:"'Cinzel',serif", fontSize:9, letterSpacing:"3px", color:"rgba(201,149,42,0.7)", textTransform:"uppercase" }}>✦ Mestre</span>
+        <button onClick={()=>setCollapsed(true)} title="Recolher" style={{ background:"transparent",border:"none",color:"rgba(201,149,42,0.35)",cursor:"pointer",fontSize:13,padding:"1px 4px" }}>◀</button>
+      </div>
+
+      {/* Ferramentas principais */}
+      <ToolSection label="Ferramenta" icon="🔧" defaultOpen={true} accent={true}>
+        <div style={{ display:"flex", gap:4 }}>
+          <ToolBtn active={activeTool==="select"} onClick={()=>setActiveTool("select")} icon="↖" label="Mover" />
+          <ToolBtn active={activeTool==="draw"}   onClick={()=>setActiveTool("draw")}   icon="✏" label="Caneta" />
+          <ToolBtn active={activeTool==="fog"}    onClick={()=>setActiveTool("fog")}    icon="🌫" label="Névoa" color="#c080ff" />
+        </div>
+      </ToolSection>
+
+      {/* Caneta */}
+      {activeTool==="draw" && (
+        <ToolSection label="Caneta" icon="✏" defaultOpen={true}>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:3 }}>
+            {DRAW_COLORS.map(({value,label})=>(
+              <button key={value} title={label} onClick={()=>setBrushColor(value)}
+                style={{ width:18,height:18,borderRadius:"50%",background:value,padding:0,cursor:"pointer",
+                  border:brushColor===value?"2.5px solid #fff":"1.5px solid rgba(255,255,255,0.15)" }} />
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:3 }}>
             {BRUSH_SIZES.map((s)=>(
-              <button key={s} onClick={()=>setBrushSize(s)} style={{ width:28,height:28,borderRadius:"50%",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",background:brushSize===s?"rgba(40,120,220,0.4)":"rgba(30,30,30,0.75)",border:brushSize===s?"1px solid rgba(80,180,255,0.8)":"1px solid rgba(255,255,255,0.12)" }}>
-                <div style={{ width:Math.min(s,16),height:Math.min(s,16),borderRadius:"50%",background:brushColor }} />
+              <button key={s} onClick={()=>setBrushSize(s)} style={{ width:26,height:26,borderRadius:"50%",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",background:brushSize===s?"rgba(40,120,220,0.35)":"rgba(30,30,30,0.75)",border:brushSize===s?"1.5px solid rgba(80,180,255,0.8)":"1px solid rgba(255,255,255,0.1)" }}>
+                <div style={{ width:Math.min(s,14),height:Math.min(s,14),borderRadius:"50%",background:brushColor }} />
               </button>
             ))}
           </div>
-        </div>
-        <div style={secS}>
-          <span style={lblS}>Ações</span>
           <div style={{ display:"flex", gap:4 }}>
-            <button {...abtn(onUndoDraw)}>↩ Desfazer</button>
-            <button {...abtn(onClearDraw,true)}>🗑 Limpar tudo</button>
+            <button onClick={onUndoDraw} style={{ flex:1,padding:"4px 0",borderRadius:5,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(30,30,30,0.75)",color:"#b0aaa4",cursor:"pointer",fontSize:11 }}>↩ Desfazer</button>
+            <button onClick={onClearDraw} style={{ flex:1,padding:"4px 0",borderRadius:5,border:"1px solid rgba(220,60,40,0.4)",background:"rgba(160,30,10,0.25)",color:"#f09080",cursor:"pointer",fontSize:11 }}>🗑 Limpar</button>
           </div>
-        </div>
-      </>}
+        </ToolSection>
+      )}
+
       {/* Névoa */}
-      {activeTool==="fog" && <>
-        <div style={{ ...secS, borderColor:"rgba(160,80,255,0.3)", background:"rgba(60,20,80,0.65)" }}>
-          <span style={{ ...lblS, color:"rgba(200,150,255,0.85)" }}>Modo Névoa</span>
-          <div style={{ fontSize:11, color:"rgba(180,140,220,0.9)", lineHeight:1.6 }}>
-            <div>🖱️ <b>Esquerdo</b>: pintar névoa</div>
-            <div>🖱️ <b>Direito</b>: apagar névoa</div>
-            <div style={{ opacity:0.65, marginTop:2 }}>Jogadores veem preto sólido</div>
+      {activeTool==="fog" && (
+        <ToolSection label="Névoa de Guerra" icon="🌫" defaultOpen={true} accent={false}>
+          <div style={{ fontSize:10, color:"rgba(180,140,220,0.85)", lineHeight:1.6, padding:"2px 0" }}>
+            <div>🖱️ <b>Esquerdo</b>: cobrir</div>
+            <div>🖱️ <b>Direito</b>: revelar</div>
           </div>
-        </div>
-        <div style={secS}>
-          <span style={lblS}>Pincel (células)</span>
-          <div style={{ display:"flex", gap:4 }}>
+          <div style={{ display:"flex", gap:3 }}>
             {FOG_BRUSH_CELLS.map((n)=>(
-              <button key={n} onClick={()=>setFogBrushCells(n)} style={{ width:32,height:28,borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:600,background:fogBrushCells===n?"rgba(120,40,220,0.5)":"rgba(30,30,30,0.75)",border:fogBrushCells===n?"1px solid rgba(160,80,255,0.8)":"1px solid rgba(255,255,255,0.12)",color:fogBrushCells===n?"#d8b4fe":"#9a9690" }}>
+              <button key={n} onClick={()=>setFogBrushCells(n)} style={{ flex:1,padding:"4px 2px",borderRadius:5,cursor:"pointer",fontSize:10,fontWeight:600,background:fogBrushCells===n?"rgba(120,40,220,0.45)":"rgba(30,30,30,0.75)",border:fogBrushCells===n?"1px solid rgba(160,80,255,0.7)":"1px solid rgba(255,255,255,0.1)",color:fogBrushCells===n?"#d8b4fe":"#9a9690" }}>
                 {n}×{n}
               </button>
             ))}
           </div>
-        </div>
-        <div style={secS}>
-          <span style={lblS}>Ações Rápidas</span>
-          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-            <button onClick={onFillFog} style={{ padding:"5px 10px",borderRadius:6,cursor:"pointer",fontSize:12,textAlign:"left",border:"1px solid rgba(160,80,255,0.3)",background:"rgba(80,20,120,0.35)",color:"#d8b4fe" }}>■ Cobrir tudo com névoa</button>
-            <button {...abtn(onClearFog,true)}>☀ Revelar tudo</button>
+          <div style={{ display:"flex", flexDirection:"column", gap:4, marginTop:2 }}>
+            <button onClick={onFillFog} style={{ padding:"5px 0",borderRadius:5,cursor:"pointer",fontSize:11,textAlign:"center",border:"1px solid rgba(160,80,255,0.3)",background:"rgba(80,20,120,0.3)",color:"#d8b4fe" }}>■ Cobrir tudo</button>
+            <button onClick={onClearFog} style={{ padding:"5px 0",borderRadius:5,cursor:"pointer",fontSize:11,border:"1px solid rgba(220,80,40,0.35)",background:"rgba(160,30,10,0.2)",color:"#f0a080" }}>☀ Revelar tudo</button>
           </div>
-        </div>
-      </>}
-      {/* Tokens */}
-      <div style={secS}>
-        <span style={lblS}>Tokens</span>
-        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-          <button onClick={onAddToken} style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>🎭 Adicionar Token</button>
-        </div>
-      </div>
+        </ToolSection>
+      )}
 
-      {/* ══ FERRAMENTAS DO MESTRE ══ */}
-      
-      {/* Medidor de Distância */}
-      <div style={{ ...secS, borderColor: measureActive?"rgba(80,200,255,0.5)":"rgba(255,255,255,0.12)" }}>
-        <span style={lblS}>📏 Medidor de Distância</span>
+      {/* Mapa de Fundo */}
+      <ToolSection label="Mapa de Fundo" icon="🗺" defaultOpen={false}>
+        <button onClick={()=>fileRef.current?.click()} style={{ padding:"5px 0",borderRadius:5,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(30,30,30,0.75)",color:"#e0ddd8",cursor:"pointer",fontSize:11,width:"100%" }}>📂 Carregar imagem</button>
+        {hasMap && <button onClick={onMapClear} style={{ padding:"5px 0",borderRadius:5,border:"1px solid rgba(220,60,40,0.4)",background:"rgba(160,30,10,0.2)",color:"#f09080",cursor:"pointer",fontSize:11,width:"100%" }}>🗑 Remover mapa</button>}
+        {!hasMap && <span style={{ fontSize:10, color:"rgba(201,149,42,0.4)", fontStyle:"italic" }}>Sem mapa carregado</span>}
+        <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={(e)=>{ onMapUpload(e.target.files[0]); e.target.value=""; }} />
+      </ToolSection>
+
+      {/* Tokens */}
+      <ToolSection label="Tokens" icon="🎭" defaultOpen={false}>
+        <button onClick={onAddToken} style={{ padding:"5px 0",borderRadius:5,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(30,30,30,0.75)",color:"#e0ddd8",cursor:"pointer",fontSize:11,width:"100%" }}>🎭 Adicionar Token</button>
+      </ToolSection>
+
+      {/* Marcadores de Área */}
+      <ToolSection label="Área de Efeito" icon="💥" defaultOpen={false}>
+        <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
+          {AREA_SHAPES.map(s=>(
+            <button key={s.id} onClick={()=>setAreaShape(s.id)} title={s.label}
+              style={{ flex:1,padding:"5px 2px",borderRadius:5,cursor:"pointer",fontSize:13,border:`1px solid ${areaShape===s.id?"rgba(80,200,255,0.7)":"rgba(255,255,255,0.1)"}`,background:areaShape===s.id?"rgba(40,120,220,0.3)":"rgba(30,30,30,0.75)",color:areaShape===s.id?"#80d0ff":"#c0b8b0" }}>{s.icon}</button>
+          ))}
+        </div>
+        <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
+          {AREA_COLORS.map(c=>(
+            <button key={c} onClick={()=>setAreaColor(c)} style={{ width:20,height:20,borderRadius:"50%",background:c,padding:0,cursor:"pointer",border:areaColor===c?"2.5px solid #fff":"1.5px solid rgba(255,255,255,0.15)" }} />
+          ))}
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+          <span style={{ fontSize:9, color:"rgba(200,190,180,0.6)", whiteSpace:"nowrap" }}>Raio:</span>
+          <input type="range" min={1} max={10} value={areaRadius} onChange={e=>setAreaRadius(Number(e.target.value))}
+            style={{ flex:1, accentColor:"#c9952a" }} />
+          <span style={{ fontSize:10, color:"rgba(201,149,42,0.7)", minWidth:14, textAlign:"right" }}>{areaRadius}</span>
+        </div>
+        {(areaShape==='cone'||areaShape==='line') && (
+          <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+            <span style={{ fontSize:9, color:"rgba(200,190,180,0.6)", whiteSpace:"nowrap" }}>Ângulo:</span>
+            <input type="range" min={0} max={360} value={areaAngle} onChange={e=>setAreaAngle(Number(e.target.value))}
+              style={{ flex:1, accentColor:"#c9952a" }} />
+            <span style={{ fontSize:10, color:"rgba(201,149,42,0.7)", minWidth:22, textAlign:"right" }}>{areaAngle}°</span>
+          </div>
+        )}
+        <input value={areaLabel} onChange={e=>setAreaLabel(e.target.value)} placeholder="Rótulo (opcional)"
+          style={{ background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:4,padding:"4px 7px",color:"#e0ddd8",fontSize:11,outline:"none",width:"100%",boxSizing:"border-box" }} />
+        <div style={{ display:"flex", gap:4 }}>
+          <button onClick={addAreaMarker} style={{ flex:2,padding:"5px 0",borderRadius:5,border:"1px solid rgba(80,200,255,0.3)",background:"rgba(20,80,140,0.3)",color:"#80d0ff",cursor:"pointer",fontSize:11 }}>+ Colocar</button>
+          <button onClick={clearAreaMarkers} style={{ flex:1,padding:"5px 0",borderRadius:5,border:"1px solid rgba(220,60,40,0.3)",background:"rgba(160,30,10,0.2)",color:"#f09080",cursor:"pointer",fontSize:11 }}>Limpar</button>
+        </div>
+      </ToolSection>
+
+      {/* Medidor */}
+      <ToolSection label="Medidor" icon="📏" defaultOpen={false}>
         <div style={{ display:"flex", gap:4, alignItems:"center" }}>
-          <button onClick={()=>setMeasureActive(!measureActive)} style={{ padding:"5px 10px", borderRadius:6, cursor:"pointer", fontSize:12,
-            border:`1px solid ${measureActive?"rgba(80,200,255,0.8)":"rgba(255,255,255,0.12)"}`,
-            background:measureActive?"rgba(20,80,140,0.5)":"rgba(30,30,30,0.75)",
+          <button onClick={()=>setMeasureActive(!measureActive)} style={{ flex:1,padding:"5px 0",borderRadius:5,cursor:"pointer",fontSize:11,
+            border:`1px solid ${measureActive?"rgba(80,200,255,0.7)":"rgba(255,255,255,0.1)"}`,
+            background:measureActive?"rgba(20,80,140,0.4)":"rgba(30,30,30,0.75)",
             color:measureActive?"#80d0ff":"#e0ddd8" }}>
             {measureActive?"🔵 Ativo":"Ativar"}
           </button>
-          {measureResult && <span style={{ fontSize:11, color:"#80d0ff", fontFamily:"monospace" }}>{measureResult}</span>}
+          {measureResult && <span style={{ fontSize:11, color:"#80d0ff", fontFamily:"monospace", whiteSpace:"nowrap" }}>{measureResult}</span>}
         </div>
-        {measureActive && <span style={{ fontSize:10, color:"rgba(120,180,220,0.7)", fontStyle:"italic" }}>Clique: ponto A → B</span>}
-      </div>
+        {measureActive && <span style={{ fontSize:9, color:"rgba(120,180,220,0.65)", fontStyle:"italic" }}>Clique: ponto A → B</span>}
+      </ToolSection>
 
       {/* Ping */}
-      <div style={secS}>
-        <span style={lblS}>📍 Ping no Mapa</span>
-        <div style={{ display:"flex", gap:4 }}>
-          <button onClick={()=>setPingActive(!pingActive)} style={{ padding:"5px 10px", borderRadius:6, cursor:"pointer", fontSize:12,
-            border:`1px solid ${pingActive?"rgba(255,160,60,0.8)":"rgba(255,255,255,0.12)"}`,
-            background:pingActive?"rgba(140,60,10,0.5)":"rgba(30,30,30,0.75)",
-            color:pingActive?"#ffa040":"#e0ddd8" }}>
-            {pingActive?"🟠 Ativo":"Ativar"}
-          </button>
-        </div>
-        {pingActive && <span style={{ fontSize:10, color:"rgba(255,160,60,0.7)", fontStyle:"italic" }}>Clique no mapa para pingar</span>}
-      </div>
+      <ToolSection label="Ping" icon="📍" defaultOpen={false}>
+        <button onClick={()=>setPingActive(!pingActive)} style={{ padding:"5px 0",width:"100%",borderRadius:5,cursor:"pointer",fontSize:11,
+          border:`1px solid ${pingActive?"rgba(255,160,60,0.7)":"rgba(255,255,255,0.1)"}`,
+          background:pingActive?"rgba(140,60,10,0.45)":"rgba(30,30,30,0.75)",
+          color:pingActive?"#ffa040":"#e0ddd8" }}>
+          {pingActive?"🟠 Ativo — clique no mapa":"Ativar Ping"}
+        </button>
+      </ToolSection>
 
       {/* Iniciativa */}
-      <div style={secS}>
-        <span style={lblS}>⚔ Ordem de Iniciativa</span>
+      <ToolSection label="Iniciativa" icon="⚔" defaultOpen={false}>
         <InitiativeTracker initiative={initiative} setInitiative={setInitiative} />
-      </div>
+      </ToolSection>
 
-      {/* Notas da Sessão */}
-      <div style={{ ...secS, borderColor: showNotes?"rgba(201,149,42,0.4)":"rgba(255,255,255,0.12)" }}>
-        <span style={lblS} onClick={()=>setShowNotes(!showNotes)} style={{ ...lblS, cursor:"pointer" }}>
-          📝 Notas da Sessão {showNotes?"▲":"▼"}
-        </span>
-        {showNotes && (
-          <textarea
-            value={sessionNotes}
-            onChange={(e)=>setSessionNotes(e.target.value)}
-            placeholder="Anote NPCs, locais, pistas, segredos..."
-            style={{ width:"100%", height:110, background:"rgba(10,6,2,0.8)", border:"1px solid rgba(201,149,42,0.25)", borderRadius:4, color:"rgba(244,234,208,0.8)", fontSize:12, padding:"6px 8px", resize:"vertical", outline:"none", fontFamily:"serif", lineHeight:1.5, boxSizing:"border-box" }}
-          />
-        )}
-      </div>
+      {/* Notas */}
+      <ToolSection label="Notas da Sessão" icon="📝" defaultOpen={false}>
+        <textarea
+          value={sessionNotes}
+          onChange={(e)=>setSessionNotes(e.target.value)}
+          placeholder="NPCs, pistas, segredos..."
+          style={{ width:"100%", height:90, background:"rgba(10,6,2,0.8)", border:"1px solid rgba(201,149,42,0.2)", borderRadius:4, color:"rgba(244,234,208,0.8)", fontSize:11, padding:"6px 8px", resize:"none", outline:"none", fontFamily:"serif", lineHeight:1.5, boxSizing:"border-box" }}
+        />
+      </ToolSection>
     </div>
   );
 }
@@ -4554,6 +4859,8 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
   const [measureActive, setMeasureActive] = useState(false);
   const [measurePoints, setMeasurePoints] = useState([]);
   const [measureResult, setMeasureResult] = useState(null);
+  const [areaMarkers, setAreaMarkers]   = useState([]);
+  const [mapChatOpen, setMapChatOpen]   = useState(false);
 
   useKeyboard(isPanMode, setIsPanModeSync, permissions, setActiveTool, undoLast);
 
@@ -4692,6 +4999,8 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
 
       <TokenLayer tokens={tokens} camera={camera} cellSize={cellSize} isGM={permissions.isGM} onUpdate={updateToken} onRemove={removeToken} activeTool={activeTool} />
 
+      <AreaMarkersLayer markers={areaMarkers} camera={camera} cellSize={cellSize} />
+
       {permissions.canFog && activeTool==="fog" && !isPanMode && (
         <FogPaintCanvas camera={camera} cellSize={cellSize} width={size.width} height={size.height}
           fogBrushCells={fogBrushCells} onPaint={paintFogCells} onErase={eraseFogCells} />
@@ -4716,8 +5025,12 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
           sessionNotes={sessionNotes}   setSessionNotes={setSessionNotes}
           measureActive={measureActive} setMeasureActive={setMeasureActive}
           cellSize={cellSize}           measureResult={measureResult}
+          areaMarkers={areaMarkers}     setAreaMarkers={setAreaMarkers}
+          mapChatOpen={mapChatOpen}
         />
       )}
+
+      <MapChatPanel mapChatOpen={mapChatOpen} setMapChatOpen={setMapChatOpen} role={role} />
 
       {showTokenModal && permissions.canEdit && (
         <AddTokenModal onAdd={addToken} onClose={()=>setShowTokenModal(false)} />
