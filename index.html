@@ -2386,6 +2386,8 @@ async function iniciarSessao(nome, code, criando){
 
   attachListener();
   setConn(firebaseOK);
+  // Expõe isMaster para window (let não vaza automaticamente)
+  window.isMaster = !!isMaster;
   // #19: isMaster já está confirmado neste ponto — botão encerrar aparece correctamente
   if(isMaster){ 
     const b=$('btn-encerrar'); if(b) b.classList.remove('hidden'); 
@@ -2431,7 +2433,8 @@ function showTab(id, btn){
     $('header').style.display = 'none';
     $('main-nav').style.display = 'none';
     $('player-bar').style.display = 'none';
-    // _mountVTT lê `isMaster` diretamente do closure do grimório
+    // Sincroniza window.isMaster ANTES de montar o VTT (let não vaza para window)
+    window.isMaster = !!isMaster;
     if(typeof window._mountVTT==='function') window._mountVTT();
   } else {
     $('header').style.display = 'block';
@@ -5721,8 +5724,8 @@ window._mountVTT = function() {
     delete container._vttRoot;
   }
   container.innerHTML = "";
-  // isMaster lido DIRETAMENTE do closure JS do grimório (variável local, não window)
-  const role = isMaster ? "GM" : "PLAYER";
+  // window.isMaster é setado de forma síncrona antes de _mountVTT ser chamado
+  const role = window.isMaster === true ? "GM" : "PLAYER";
   const root = ReactDOM.createRoot(container);
   root.render(<VTTApp role={role} />);
   container._vttRoot = root;
