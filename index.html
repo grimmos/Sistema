@@ -1082,16 +1082,16 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
     <div class="rchapter" id="r-pericias">
       <div class="ch-head"><p class="ch-num">Capítulo II</p><h2 class="ch-title">Perícias</h2><div class="ch-ornament"><div class="ch-orn-line rev"></div><span style="color:rgba(201,149,42,.4);font-size:12px;">⬟</span><div class="ch-orn-line"></div></div></div>
       <div class="arcane-quote"><p>"Tudo pode se tornar uma perícia.<br>A excelência nasce do acerto perfeito."</p></div>
-      <div class="scroll"><div class="scroll-title">Origem &amp; Evolução</div><p>Todo aventureiro começa com <span class="tag tag-gold">Fazer Algo (I)</span>. Um <strong style="color:var(--gold2)">6 no dado</strong> desbloqueia uma nova perícia que nasce no <strong style="color:var(--gold2)">Nível II</strong>. Dois 6s simultâneos em qualquer perícia a avançam de nível.</p></div>
+      <div class="scroll"><div class="scroll-title">Origem &amp; Evolução</div><p>Todo aventureiro começa com <span class="tag tag-gold">Fazer Algo (I)</span>. Um <strong style="color:var(--gold2)">6 no dado</strong> desbloqueia uma nova perícia que nasce no <strong style="color:var(--gold2)">Nível II</strong>. Para subir de nível, todos os dados rolados naquele nível devem sair 6 ao mesmo tempo.</p></div>
       <div class="scroll"><div class="scroll-title">Árvore de Progressão</div>
         <div class="pericia-wrap">
-          <div class="pericia-lvl"><span class="p-lvl-tag">Nível I</span><div class="p-nodes"><div class="p-node lv1"><div class="p-node-name">Fazer Algo</div><div class="p-node-dice">rola 1d6</div></div></div></div>
-          <div class="pericia-lvl"><span class="p-lvl-tag">Nível II</span><div class="p-nodes"><div class="p-node lv2"><div class="p-node-name">Nova Perícia</div><div class="p-node-dice">2d6 · maior vale ✦ nascida aqui</div></div></div></div>
-          <div class="pericia-lvl"><span class="p-lvl-tag">Nível III</span><div class="p-nodes"><div class="p-node lv3"><div class="p-node-name">Perícia</div><div class="p-node-dice">3d6 · maior vale</div></div></div></div>
-          <div class="pericia-lvl"><span class="p-lvl-tag">Nível IV</span><div class="p-nodes"><div class="p-node lv4"><div class="p-node-name">Perícia</div><div class="p-node-dice">4d6 · maior vale</div></div></div></div>
-          <div class="pericia-lvl"><span class="p-lvl-tag">Nível V</span><div class="p-nodes"><div class="p-node lv5"><div class="p-node-name">✦ Máximo ✦</div><div class="p-node-dice">5d6 — limite absoluto</div></div></div></div>
+          <div class="pericia-lvl"><span class="p-lvl-tag">Nível I</span><div class="p-nodes"><div class="p-node lv1"><div class="p-node-name">Fazer Algo</div><div class="p-node-dice">1d6 · 1×6 → nova perícia (nível II)</div></div></div></div>
+          <div class="pericia-lvl"><span class="p-lvl-tag">Nível II</span><div class="p-nodes"><div class="p-node lv2"><div class="p-node-name">Aprendiz</div><div class="p-node-dice">2d6 · 2×6 → sobe para III</div></div></div></div>
+          <div class="pericia-lvl"><span class="p-lvl-tag">Nível III</span><div class="p-nodes"><div class="p-node lv3"><div class="p-node-name">Treinado</div><div class="p-node-dice">3d6 · 3×6 → sobe para IV</div></div></div></div>
+          <div class="pericia-lvl"><span class="p-lvl-tag">Nível IV</span><div class="p-nodes"><div class="p-node lv4"><div class="p-node-name">Especialista</div><div class="p-node-dice">4d6 · 4×6 → sobe para V</div></div></div></div>
+          <div class="pericia-lvl"><span class="p-lvl-tag">Nível V</span><div class="p-nodes"><div class="p-node lv5"><div class="p-node-name">✦ Mestre ✦</div><div class="p-node-dice">5d6 — limite absoluto</div></div></div></div>
         </div>
-        <p style="font-size:13px;color:rgba(244,234,208,.4);font-style:italic;margin-top:6px;">Duplo 6 em qualquer nível avança para o próximo.</p>
+        <p style="font-size:13px;color:rgba(244,234,208,.4);font-style:italic;margin-top:6px;">Todos os dados do nível atual precisam sair 6 para avançar.</p>
       </div>
       <div class="ch-end"><div class="orn-line"></div><p>✦ A prática forja o mestre ✦</p></div>
     </div>
@@ -2460,6 +2460,13 @@ function renderSkills(p,editable){
     const modBadge=mod!==0
       ?`<span style="font-family:'Cinzel',serif;font-size:10px;padding:1px 6px;border-radius:3px;margin-left:4px;background:${mod<0?'rgba(200,60,60,.18)':'rgba(60,160,80,.18)'};color:${mod<0?'#e08080':'#80d080'};border:1px solid ${mod<0?'rgba(200,60,60,.35)':'rgba(60,160,80,.35)'};">${mod>0?'+':''}${mod}</span>`
       :'';
+    // Dica de avanço: Fazer Algo = 1×6 → nova perícia; outros = todos os dados 6
+    let upgradeTip = '';
+    if(sk.id==='fazer-algo'){
+      upgradeTip = `<span style="font-size:9px;color:rgba(201,149,42,.35);margin-left:4px;font-style:italic;">1×6 → nova perícia</span>`;
+    } else if(!max){
+      upgradeTip = `<span style="font-size:9px;color:rgba(201,149,42,.35);margin-left:4px;font-style:italic;">${sk.level}×6 → ${LVL_LBL[sk.level+1]||''}</span>`;
+    }
     card.innerHTML=`
       <div class="skill-hdr">
         <span class="skill-name">${esc(sk.name)}${modBadge}</span>
@@ -2468,7 +2475,7 @@ function renderSkills(p,editable){
       <div class="dice-row" id="dr-${sk.id}">${dice}</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         ${editable
-          ?`<button class="roll-btn" id="rb-${sk.id}" onclick="rollSkill('${sk.id}')">Rolar ${sk.level}d6</button>`
+          ?`<button class="roll-btn" id="rb-${sk.id}" onclick="rollSkill('${sk.id}')">Rolar ${sk.level}d6</button>${upgradeTip}`
           :'<span style="font-family:\'Cinzel\',serif;font-size:10px;color:rgba(201,149,42,.25);letter-spacing:1px;">somente leitura</span>'}
         <span class="skill-result r-norm" id="sr-${sk.id}"></span>
       </div>`;
@@ -2540,8 +2547,7 @@ function finalizeRoll(id, preCalcRes){
   }
 
   if(id==='fazer-algo'&&sixes>=1){
-    // Fazer Algo permanece sempre Nível I — qualquer 6 abre nova perícia
-    // Forçar nível 1 por segurança (ex: dados importados com nível errado)
+    // Fazer Algo permanece sempre Nível I — qualquer 6 abre nova perícia (Nível II)
     if(sk.level !== 1){ sk.level = 1; }
     sr.className='skill-result r-crit';
     sr.textContent='✦ Crítico! Nova perícia desbloqueada!';
@@ -2552,11 +2558,20 @@ function finalizeRoll(id, preCalcRes){
     postRollToChat(sk.name, res, sr.textContent, sr.className);
     schSave(); return;
   }
-  if(sixes>=sk.level&&sk.level<5){
+  // Regra de avanço de nível: para subir do nível N→N+1 precisa rolar (N-1)d6 todos saindo 6
+  // Nível II→III: 2 dados todos 6 | III→IV: 3 dados todos 6 | IV→V: 4 dados todos 6
+  // Como o jogador já rola sk.level dados, verificamos se os primeiros (sk.level-1) dados saíram 6
+  // na verdade: precisa que todos os (sk.level) dados saiam 6 — mas o botão deve mostrar quantos dados rolar
+  // A lógica do sistema: nível atual = número de dados rolados; para subir precisa TODOS saírem 6
+  // Nível II (2d6) → III: precisa 2×6; III (3d6)→IV: 3×6; IV (4d6)→V: 4×6 — ou seja todos os dados
+  const dicesForUpgrade = sk.level; // todos os dados do nível atual precisam ser 6
+  const allSixes = sixes >= dicesForUpgrade;
+  if(allSixes && sk.level<5){
     sk.level=Math.min(5,sk.level+1);
     sr.className='skill-result r-crit'; sr.textContent='✦✦ '+sk.name+' → '+LVL_LBL[sk.level];
     $('mup-name').textContent=sk.name;
-    $('mup-txt').textContent=sk.name+' avança para '+LVL_LBL[sk.level]+'! Você rola '+sk.level+'d6.';
+    const nextDice = sk.level; // após subir, sk.level já foi incrementado
+    $('mup-txt').textContent=sk.name+' avança para '+LVL_LBL[sk.level]+'! Agora você rola '+nextDice+'d6.\nPara subir ao próximo nível: todos os '+nextDice+'d6 devem sair 6.';
     $('modal-up').classList.remove('hidden');
     sk.lastRollResults=res; sk.lastResult=sr.textContent; sk.lastResultClass=sr.className;
     postRollToChat(sk.name, res, sr.textContent, sr.className);
@@ -3956,7 +3971,6 @@ function MapImageLayer({ mapTransform, cellSize, cameraScale, canEdit, onUpdate 
   const dragging = useRef(false);
   const resizing = useRef(null);
   const ds       = useRef({});
-  const [hovered, setHovered] = React.useState(false);
   if(!mapTransform) return null;
   const px=mapTransform.x*cellSize, py=mapTransform.y*cellSize;
   const pw=mapTransform.w*cellSize, ph=mapTransform.h*cellSize;
@@ -3967,12 +3981,7 @@ function MapImageLayer({ mapTransform, cellSize, cameraScale, canEdit, onUpdate 
     dragging.current=true;
     ds.current={ mx:e.clientX, my:e.clientY, tx:mapTransform.x, ty:mapTransform.y };
     const sc = cameraScale;
-    const mv=(ev)=>{
-      if(!dragging.current)return;
-      const nx = ds.current.tx+(ev.clientX-ds.current.mx)/sc/cellSize;
-      const ny = ds.current.ty+(ev.clientY-ds.current.my)/sc/cellSize;
-      onUpdate({ x:nx, y:ny });
-    };
+    const mv=(ev)=>{ if(!dragging.current)return; onUpdate({ x:ds.current.tx+(ev.clientX-ds.current.mx)/sc/cellSize, y:ds.current.ty+(ev.clientY-ds.current.my)/sc/cellSize }); };
     const up=()=>{ dragging.current=false; window.removeEventListener("mousemove",mv); window.removeEventListener("mouseup",up); };
     window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
   };
@@ -3994,50 +4003,16 @@ function MapImageLayer({ mapTransform, cellSize, cameraScale, canEdit, onUpdate 
     window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
   };
 
-  const handles=[
-    {id:"nw",cx:px,    cy:py},    {id:"n",cx:px+pw/2,cy:py},    {id:"ne",cx:px+pw,cy:py},
-    {id:"e", cx:px+pw, cy:py+ph/2},                              {id:"w", cx:px,    cy:py+ph/2},
-    {id:"se",cx:px+pw, cy:py+ph}, {id:"s",cx:px+pw/2,cy:py+ph}, {id:"sw",cx:px,    cy:py+ph},
-  ];
+  const handles=[{id:"nw",cx:px,cy:py},{id:"n",cx:px+pw/2,cy:py},{id:"ne",cx:px+pw,cy:py},{id:"e",cx:px+pw,cy:py+ph/2},{id:"se",cx:px+pw,cy:py+ph},{id:"s",cx:px+pw/2,cy:py+ph},{id:"sw",cx:px,cy:py+ph},{id:"w",cx:px,cy:py+ph/2}];
   const cur={nw:"nw-resize",n:"n-resize",ne:"ne-resize",e:"e-resize",se:"se-resize",s:"s-resize",sw:"sw-resize",w:"w-resize"};
-  const cornerHandles = new Set(["nw","ne","se","sw"]);
 
   return (
     <g style={{ pointerEvents:canEdit?"auto":"none" }}>
-      <image href={mapTransform.src} x={px} y={py} width={pw} height={ph}
-        preserveAspectRatio="xMidYMid meet"
-        style={{ cursor:canEdit?"move":"default" }}
-        onMouseDown={onImgDown}
-        onMouseEnter={()=>setHovered(true)}
-        onMouseLeave={()=>setHovered(false)}
-      />
-      {/* Borda de seleção */}
-      {canEdit && <rect x={px} y={py} width={pw} height={ph} fill="none"
-        stroke={hovered||dragging.current?"rgba(80,200,255,0.9)":"rgba(80,180,255,0.55)"}
-        strokeWidth={hovered||dragging.current?2:1.5} strokeDasharray="6 3"
-        style={{ pointerEvents:"none" }} />}
-      {/* Handles */}
-      {canEdit && handles.map(({id,cx,cy})=>{
-        const isCorner = cornerHandles.has(id);
-        const size = isCorner ? 12 : 9;
-        return (
-          <rect key={id}
-            x={cx-size/2} y={cy-size/2} width={size} height={size} rx={isCorner?3:2}
-            fill={isCorner?"rgba(40,160,255,0.95)":"rgba(80,200,255,0.8)"}
-            stroke="#fff" strokeWidth={1.5}
-            style={{ cursor:cur[id], filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.5))" }}
-            onMouseDown={onHandleDown(id)}
-          />
-        );
-      })}
-      {/* Label de dimensões ao arrastar */}
-      {canEdit && (dragging.current||resizing.current) && (
-        <text x={px+pw/2} y={py-8} textAnchor="middle"
-          fill="rgba(80,200,255,0.9)" fontSize={11} fontFamily="monospace"
-          style={{ pointerEvents:"none", filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.8))" }}>
-          {Math.round(mapTransform.w)}×{Math.round(mapTransform.h)} células
-        </text>
-      )}
+      <image href={mapTransform.src} x={px} y={py} width={pw} height={ph} preserveAspectRatio="xMidYMid meet" style={{ cursor:canEdit?"move":"default" }} onMouseDown={onImgDown} />
+      {canEdit && <rect x={px} y={py} width={pw} height={ph} fill="none" stroke="rgba(80,180,255,0.7)" strokeWidth={1.5} strokeDasharray="6 3" style={{ pointerEvents:"none" }} />}
+      {canEdit && handles.map(({id,cx,cy})=>(
+        <rect key={id} x={cx-5} y={cy-5} width={10} height={10} rx={2} fill="rgba(30,140,255,0.9)" stroke="#fff" strokeWidth={1} style={{ cursor:cur[id] }} onMouseDown={onHandleDown(id)} />
+      ))}
     </g>
   );
 }
@@ -4518,89 +4493,119 @@ const AREA_SHAPES = [
 ];
 const AREA_COLORS = ["#e05252","#52c47a","#5278e0","#e09a3a","#d4c84a","#9a52e0"];
 
-function AreaMarkersLayer({ markers, camera, cellSize }) {
+function AreaMarkersLayer({ markers, camera, cellSize, isGM, onUpdateMarker, onRemoveMarker }) {
+  const dragging = React.useRef(null);
+  const ds = React.useRef({});
+  const [hoveredId, setHoveredId] = React.useState(null);
+  const [draggingId, setDraggingId] = React.useState(null);
+
+  const onMarkerDown = (e, m) => {
+    if (!isGM) return;
+    e.stopPropagation();
+    dragging.current = m.id;
+    setDraggingId(m.id);
+    ds.current = { mx: e.clientX, my: e.clientY, cx: m.cx, cy: m.cy };
+    const sc = camera.scale * cellSize;
+    const mv = (ev) => {
+      if (!dragging.current) return;
+      const dx = (ev.clientX - ds.current.mx) / sc;
+      const dy = (ev.clientY - ds.current.my) / sc;
+      onUpdateMarker(m.id, { cx: ds.current.cx + dx, cy: ds.current.cy + dy });
+    };
+    const up = () => {
+      dragging.current = null;
+      setDraggingId(null);
+      window.removeEventListener('mousemove', mv);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', mv);
+    window.addEventListener('mouseup', up);
+  };
+
   return (
-    <svg style={{ position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:11 }}>
+    <svg style={{ position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents: isGM ? "auto" : "none",zIndex:11 }}>
       {markers.map(m => {
         const cx = m.cx*cellSize*camera.scale + camera.x;
         const cy = m.cy*cellSize*camera.scale + camera.y;
         const r  = m.r*cellSize*camera.scale;
-        const alpha = 0.22;
         const stroke = m.color;
-        const fill   = m.color.replace(/^#/,'') ;
-        if (m.shape==='circle') return (
+        const isHov = hoveredId === m.id;
+        const isDrag = draggingId === m.id;
+        const strokeW = isHov || isDrag ? 2.5 : 1.5;
+        const commonProps = {
+          onMouseEnter: () => isGM && setHoveredId(m.id),
+          onMouseLeave: () => isGM && setHoveredId(null),
+          onMouseDown:  (e) => onMarkerDown(e, m),
+          style: { cursor: isGM ? (isDrag ? "grabbing" : "grab") : "default" }
+        };
+
+        let shape = null;
+        if (m.shape==='circle') shape = (
           <g key={m.id}>
-            <circle cx={cx} cy={cy} r={r} fill={`${m.color}38`} stroke={stroke} strokeWidth={1.5} strokeDasharray="6 3" />
-            <text x={cx} y={cy+3} textAnchor="middle" fill={stroke} fontSize={Math.max(10,r*0.28)} fontFamily="serif" opacity={0.85}>{m.label||""}</text>
+            <circle cx={cx} cy={cy} r={r} fill={`${m.color}38`} stroke={stroke} strokeWidth={strokeW} strokeDasharray="6 3" {...commonProps} />
+            <text x={cx} y={cy+3} textAnchor="middle" fill={stroke} fontSize={Math.max(10,r*0.28)} fontFamily="serif" opacity={0.85} style={{pointerEvents:"none"}}>{m.label||""}</text>
           </g>
         );
-        if (m.shape==='square') {
+        else if (m.shape==='square') {
           const s = r*1.6;
-          return (
+          shape = (
             <g key={m.id}>
-              <rect x={cx-s/2} y={cy-s/2} width={s} height={s} fill={`${m.color}38`} stroke={stroke} strokeWidth={1.5} strokeDasharray="6 3" />
-              <text x={cx} y={cy+3} textAnchor="middle" fill={stroke} fontSize={Math.max(10,s*0.18)} fontFamily="serif" opacity={0.85}>{m.label||""}</text>
+              <rect x={cx-s/2} y={cy-s/2} width={s} height={s} fill={`${m.color}38`} stroke={stroke} strokeWidth={strokeW} strokeDasharray="6 3" {...commonProps} />
+              <text x={cx} y={cy+3} textAnchor="middle" fill={stroke} fontSize={Math.max(10,s*0.18)} fontFamily="serif" opacity={0.85} style={{pointerEvents:"none"}}>{m.label||""}</text>
             </g>
           );
         }
-        if (m.shape==='cone') {
+        else if (m.shape==='cone') {
           const angle = (m.angle||0)*Math.PI/180;
           const spread = (m.spread||60)*Math.PI/180;
-          const a1 = angle - spread/2, a2 = angle + spread/2;
-          const x1 = cx + r*Math.cos(a1), y1 = cy + r*Math.sin(a1);
-          const x2 = cx + r*Math.cos(a2), y2 = cy + r*Math.sin(a2);
-          return (
+          const a1 = angle-spread/2, a2 = angle+spread/2;
+          const x1 = cx+r*Math.cos(a1), y1 = cy+r*Math.sin(a1);
+          const x2 = cx+r*Math.cos(a2), y2 = cy+r*Math.sin(a2);
+          shape = (
             <g key={m.id}>
-              <path d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 0,1 ${x2},${y2} Z`} fill={`${m.color}38`} stroke={stroke} strokeWidth={1.5} strokeDasharray="6 3" />
+              <path d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 0,1 ${x2},${y2} Z`} fill={`${m.color}38`} stroke={stroke} strokeWidth={strokeW} strokeDasharray="6 3" {...commonProps} />
             </g>
           );
         }
-        if (m.shape==='line') {
+        else if (m.shape==='line') {
           const angle = (m.angle||0)*Math.PI/180;
-          const ex = cx + r*2*Math.cos(angle), ey = cy + r*2*Math.sin(angle);
+          const ex = cx+r*2*Math.cos(angle), ey = cy+r*2*Math.sin(angle);
           const w = Math.max(6, r*0.4);
-          return (
+          shape = (
             <g key={m.id}>
-              <line x1={cx} y1={cy} x2={ex} y2={ey} stroke={stroke} strokeWidth={w} strokeOpacity={0.35} strokeLinecap="round" />
-              <line x1={cx} y1={cy} x2={ex} y2={ey} stroke={stroke} strokeWidth={2} strokeOpacity={0.85} strokeLinecap="round" strokeDasharray="8 4" />
+              <line x1={cx} y1={cy} x2={ex} y2={ey} stroke={stroke} strokeWidth={w} strokeOpacity={0.35} strokeLinecap="round" {...commonProps} />
+              <line x1={cx} y1={cy} x2={ex} y2={ey} stroke={stroke} strokeWidth={strokeW} strokeOpacity={0.85} strokeLinecap="round" strokeDasharray="8 4" style={{pointerEvents:"none"}} />
             </g>
           );
         }
-        return null;
+
+        if (!shape) return null;
+        return (
+          <g key={m.id}>
+            {shape}
+            {/* Botão de remover ao passar o mouse (só GM) */}
+            {isGM && isHov && !isDrag && (
+              <g style={{ cursor:"pointer" }} onMouseDown={(e)=>{ e.stopPropagation(); onRemoveMarker(m.id); }}>
+                <circle cx={cx+r*0.7} cy={cy-r*0.7} r={9} fill="rgba(180,40,20,0.9)" stroke="#fff" strokeWidth={1} />
+                <text x={cx+r*0.7} y={cy-r*0.7+4} textAnchor="middle" fill="#fff" fontSize={12} fontWeight="bold" style={{pointerEvents:"none"}}>✕</text>
+              </g>
+            )}
+          </g>
+        );
       })}
     </svg>
   );
 }
 
-// ── GMToolbox (draggável) ──
+// ── GMToolbox (redesenhado) ──
 function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken,
   initiative, setInitiative, pingActive, setPingActive,
   showNotes, setShowNotes, sessionNotes, setSessionNotes,
   measureActive, setMeasureActive, cellSize, measureResult,
-  areaMarkers, setAreaMarkers, mapChatOpen,
-  isPanMode, setIsPanMode
+  areaMarkers, setAreaMarkers, mapChatOpen
 }) {
   const fileRef = useRef(null);
   const [collapsed, setCollapsed] = React.useState(false);
-  // Drag da toolbar
-  const [pos, setPos] = React.useState({ x:12, y:12 });
-  const draggingTB = useRef(false);
-  const tbDragStart = useRef({});
-
-  const onTBDragStart = (e) => {
-    if (e.target.closest('button,input,textarea,select,label')) return;
-    draggingTB.current = true;
-    tbDragStart.current = { mx: e.clientX, my: e.clientY, px: pos.x, py: pos.y };
-    e.preventDefault();
-    const mv = (ev) => {
-      if (!draggingTB.current) return;
-      setPos({ x: tbDragStart.current.px + ev.clientX - tbDragStart.current.mx, y: tbDragStart.current.py + ev.clientY - tbDragStart.current.my });
-    };
-    const up = () => { draggingTB.current = false; window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
-    window.addEventListener('mousemove', mv);
-    window.addEventListener('mouseup', up);
-  };
-
   // Area marker state
   const [areaShape, setAreaShape] = React.useState("circle");
   const [areaColor, setAreaColor] = React.useState(AREA_COLORS[0]);
@@ -4615,7 +4620,7 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
   const clearAreaMarkers = () => setAreaMarkers([]);
 
   if (collapsed) return (
-    <div style={{ position:"absolute", top:pos.y, left:pos.x, zIndex:20 }}>
+    <div style={{ position:"absolute", top:12, left:12, zIndex:20 }}>
       <button onClick={()=>setCollapsed(false)} title="Abrir ferramentas" style={{
         width:38, height:38, borderRadius:8, border:"1.5px solid rgba(201,149,42,0.45)",
         background:"rgba(22,16,8,0.96)", color:"rgba(201,149,42,0.85)", cursor:"pointer", fontSize:18,
@@ -4625,36 +4630,26 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
   );
 
   return (
-    <div
-      onMouseDown={onTBDragStart}
-      style={{
-      position:"absolute", top:pos.y, left:pos.x, display:"flex", flexDirection:"column", gap:5, zIndex:20,
+    <div style={{
+      position:"absolute", top:12, left:12, display:"flex", flexDirection:"column", gap:5, zIndex:20,
       maxHeight:"calc(100% - 70px)", overflowY:"auto", overflowX:"visible",
-      width:192,
-      scrollbarWidth:"thin", scrollbarColor:"rgba(201,149,42,0.15) transparent",
-      userSelect:"none"
+      width:188,
+      scrollbarWidth:"thin", scrollbarColor:"rgba(201,149,42,0.15) transparent"
     }}>
-      {/* Header da toolbar — arraste aqui para mover */}
+      {/* Header da toolbar */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"5px 8px",
         background:"rgba(22,16,8,0.98)", border:"1.5px solid rgba(201,149,42,0.45)", borderRadius:8,
-        boxShadow:"0 4px 18px rgba(0,0,0,0.65)", cursor:"grab" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-          <span style={{ color:"rgba(201,149,42,0.3)", fontSize:12, letterSpacing:"1px", lineHeight:1, userSelect:"none" }}>⠿</span>
-          <span style={{ fontFamily:"'Cinzel',serif", fontSize:9, letterSpacing:"3px", color:"rgba(201,149,42,0.7)", textTransform:"uppercase" }}>✦ Mestre</span>
-        </div>
+        boxShadow:"0 4px 18px rgba(0,0,0,0.65)" }}>
+        <span style={{ fontFamily:"'Cinzel',serif", fontSize:9, letterSpacing:"3px", color:"rgba(201,149,42,0.7)", textTransform:"uppercase" }}>✦ Mestre</span>
         <button onClick={()=>setCollapsed(true)} title="Recolher" style={{ background:"transparent",border:"none",color:"rgba(201,149,42,0.35)",cursor:"pointer",fontSize:13,padding:"1px 4px" }}>◀</button>
       </div>
 
       {/* Ferramentas principais */}
       <ToolSection label="Ferramenta" icon="🔧" defaultOpen={true} accent={true}>
         <div style={{ display:"flex", gap:4 }}>
-          <ToolBtn active={activeTool==="select"} onClick={()=>setActiveTool("select")} icon="↖" label="Selec." />
-          <ToolBtn active={isPanMode} onClick={()=>setIsPanMode(!isPanMode)} icon="✋" label="Mover" color="#60c0ff" />
+          <ToolBtn active={activeTool==="select"} onClick={()=>setActiveTool("select")} icon="↖" label="Mover" />
           <ToolBtn active={activeTool==="draw"}   onClick={()=>setActiveTool("draw")}   icon="✏" label="Caneta" />
           <ToolBtn active={activeTool==="fog"}    onClick={()=>setActiveTool("fog")}    icon="🌫" label="Névoa" color="#c080ff" />
-        </div>
-        <div style={{ fontSize:9, color:"rgba(201,149,42,0.35)", fontStyle:"italic", paddingTop:1 }}>
-          {isPanMode ? "✋ Arraste para mover o mapa" : activeTool==="select" ? "↖ Clique e arraste tokens" : activeTool==="fog" ? "🌫 Esq: cobrir · Dir: revelar" : "✏ Desenhe no mapa"}
         </div>
       </ToolSection>
 
@@ -4706,14 +4701,7 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
       {/* Mapa de Fundo */}
       <ToolSection label="Mapa de Fundo" icon="🗺" defaultOpen={false}>
         <button onClick={()=>fileRef.current?.click()} style={{ padding:"5px 0",borderRadius:5,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(30,30,30,0.75)",color:"#e0ddd8",cursor:"pointer",fontSize:11,width:"100%" }}>📂 Carregar imagem</button>
-        {hasMap && (
-          <>
-            <div style={{ fontSize:9, color:"rgba(80,200,255,0.7)", fontStyle:"italic", paddingTop:1 }}>
-              ↖ Selecione a ferramenta "Selec." para mover/redimensionar o mapa
-            </div>
-            <button onClick={onMapClear} style={{ padding:"5px 0",borderRadius:5,border:"1px solid rgba(220,60,40,0.4)",background:"rgba(160,30,10,0.2)",color:"#f09080",cursor:"pointer",fontSize:11,width:"100%" }}>🗑 Remover mapa</button>
-          </>
-        )}
+        {hasMap && <button onClick={onMapClear} style={{ padding:"5px 0",borderRadius:5,border:"1px solid rgba(220,60,40,0.4)",background:"rgba(160,30,10,0.2)",color:"#f09080",cursor:"pointer",fontSize:11,width:"100%" }}>🗑 Remover mapa</button>}
         {!hasMap && <span style={{ fontSize:10, color:"rgba(201,149,42,0.4)", fontStyle:"italic" }}>Sem mapa carregado</span>}
         <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={(e)=>{ onMapUpload(e.target.files[0]); e.target.value=""; }} />
       </ToolSection>
@@ -4937,6 +4925,8 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
   const [measurePoints, setMeasurePoints] = useState([]);
   const [measureResult, setMeasureResult] = useState(null);
   const [areaMarkers, setAreaMarkers]   = useState([]);
+  const updateAreaMarker = useCallback((id, upd) => setAreaMarkers(prev => prev.map(m => m.id===id ? {...m,...upd} : m)), []);
+  const removeAreaMarker = useCallback((id) => setAreaMarkers(prev => prev.filter(m => m.id!==id)), []);
   const [mapChatOpen, setMapChatOpen]   = useState(false);
 
   useKeyboard(isPanMode, setIsPanModeSync, permissions, setActiveTool, undoLast);
@@ -5076,7 +5066,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
 
       <TokenLayer tokens={tokens} camera={camera} cellSize={cellSize} isGM={permissions.isGM} onUpdate={updateToken} onRemove={removeToken} activeTool={activeTool} />
 
-      <AreaMarkersLayer markers={areaMarkers} camera={camera} cellSize={cellSize} />
+      <AreaMarkersLayer markers={areaMarkers} camera={camera} cellSize={cellSize} isGM={permissions.isGM} onUpdateMarker={updateAreaMarker} onRemoveMarker={removeAreaMarker} />
 
       {permissions.canFog && activeTool==="fog" && !isPanMode && (
         <FogPaintCanvas camera={camera} cellSize={cellSize} width={size.width} height={size.height}
@@ -5104,7 +5094,6 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
           cellSize={cellSize}           measureResult={measureResult}
           areaMarkers={areaMarkers}     setAreaMarkers={setAreaMarkers}
           mapChatOpen={mapChatOpen}
-          isPanMode={isPanMode}         setIsPanMode={setIsPanModeSync}
         />
       )}
 
@@ -5116,8 +5105,8 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
 
       {/* Indicador de pan */}
       {isPanMode && (
-        <div style={{ position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",background:"rgba(20,50,90,0.9)",color:"#80c8ff",padding:"5px 16px",borderRadius:8,fontSize:12,pointerEvents:"none",zIndex:30,border:"1px solid rgba(80,160,255,0.5)",boxShadow:"0 2px 12px rgba(0,0,0,0.5)",whiteSpace:"nowrap" }}>
-          ✋ Modo Mover — arraste para navegar · Espaço para soltar
+        <div style={{ position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",background:"rgba(30,30,30,0.75)",color:"#ccc",padding:"4px 14px",borderRadius:6,fontSize:12,pointerEvents:"none",zIndex:30 }}>
+          Modo Pan — arraste para mover
         </div>
       )}
 
