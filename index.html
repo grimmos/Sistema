@@ -4301,7 +4301,7 @@ function useMeasure() {
   return { measure, startMeasure, updateMeasure, endMeasure };
 }
 
-// ── PingLayer: marcadores pulsantes temporários ──
+// ── PingLayer: marcadores pulsantes turbinados ──
 function PingLayer({ pings, camera, cellSize }) {
   return (
     <div style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", pointerEvents:"none", zIndex:20 }}>
@@ -4310,8 +4310,30 @@ function PingLayer({ pings, camera, cellSize }) {
         const top  = pg.y * cellSize * camera.scale + camera.y;
         return (
           <div key={pg.id} style={{ position:"absolute", left, top, transform:"translate(-50%,-50%)", pointerEvents:"none" }}>
-            <div style={{ width:28, height:28, borderRadius:"50%", border:"3px solid rgba(255,220,40,0.9)", background:"rgba(255,220,40,0.25)", animation:"pingPulse 0.55s ease-out infinite" }} />
-            <div style={{ position:"absolute", inset:6, borderRadius:"50%", background:"rgba(255,220,40,0.7)" }} />
+            {/* Círculo externo pulsante */}
+            <div style={{ 
+              width:40, height:40, borderRadius:"50%", 
+              border:"4px solid rgba(255,220,40,0.9)", 
+              background:"rgba(255,220,40,0.15)", 
+              animation:"pingPulse 0.8s ease-out infinite",
+              boxShadow: "0 0 15px rgba(255,220,40,0.6)"
+            }} />
+            {/* Círculo interno fixo */}
+            <div style={{ 
+              position:"absolute", top:"50%", left:"50%", 
+              transform:"translate(-50%,-50%)",
+              width:12, height:12, borderRadius:"50%", 
+              background:"#ffdc28",
+              boxShadow: "0 0 8px #ffdc28"
+            }} />
+            {/* Segundo anel de expansão */}
+            <div style={{ 
+              position:"absolute", top:"50%", left:"50%", 
+              transform:"translate(-50%,-50%)",
+              width:30, height:30, borderRadius:"50%", 
+              border:"2px solid rgba(255,255,255,0.8)", 
+              animation:"pingPulse 0.8s ease-out 0.2s infinite"
+            }} />
           </div>
         );
       })}
@@ -5074,7 +5096,7 @@ const secS = { background:"rgba(30,30,30,0.92)", border:"1px solid rgba(255,255,
 const lblS = { fontSize:10, color:"rgba(200,190,180,0.8)", textTransform:"uppercase", letterSpacing:"0.08em", userSelect:"none" };
 
 // ── GMToolbox ──
-function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, mapW, onMapResize, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken, activeTerrain, setActiveTerrain, terrainBrushCells, setTerrainBrushCells, onClearZones }) {
+function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, mapW, onMapResize, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken, activeTerrain, setActiveTerrain, terrainBrushCells, setTerrainBrushCells, onClearZones, showGrid, setShowGrid, onToggleFullScreen }) {
   const fileRef = useRef(null);
   const tbtn = (id) => ({
     onClick:()=>setActiveTool(id),
@@ -5100,6 +5122,14 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
         {collapsed ? "▶ Painel GM" : "◀ Ocultar"}
       </button>
       {!collapsed && <>
+      {/* Visual e Sistema */}
+      <div style={secS}>
+        <span style={lblS}>Sistema</span>
+        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+          <button onClick={onToggleFullScreen} style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>🖥️ Tela Cheia</button>
+          <button onClick={()=>setShowGrid(!showGrid)} style={{ padding:"5px 10px", borderRadius:6, border:"1px solid rgba(255,255,255,0.15)", background:showGrid?"rgba(40,120,220,0.3)":"rgba(30,30,30,0.75)", color:"#e0ddd8", cursor:"pointer", fontSize:12 }}>{showGrid ? "✔️ Grade On" : "❌ Grade Off"}</button>
+        </div>
+      </div>
       {/* Ferramentas */}
       <div style={secS}>
         <span style={lblS}>Ferramenta</span>
@@ -5164,6 +5194,7 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
             <button {...abtn(onClearDraw,true)}>🗑 Limpar tudo</button>
           </div>
         </div>
+      </>}
       {/* Névoa */}
       {activeTool==="fog" && <>
         <div style={{ ...secS, borderColor:"rgba(160,80,255,0.3)", background:"rgba(60,20,80,0.65)" }}>
@@ -5191,6 +5222,7 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
             <button {...abtn(onClearFog,true)}>☀ Revelar tudo</button>
           </div>
         </div>
+      </>}
       {/* Tokens */}
       <div style={secS}>
         <span style={lblS}>Tokens</span>
@@ -5215,7 +5247,6 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
           </button>
         </div>
       </div>
-      </>}
       {/* Terreno */}
       {activeTool==="terrain" && <>
         <div style={{ ...secS, borderColor:"rgba(140,100,30,0.4)", background:"rgba(50,35,10,0.65)" }}>
@@ -5354,6 +5385,19 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [activeTerrain, setActiveTerrain] = useState(TERRAIN_COLORS[0]);
   const [terrainBrushCells, setTerrainBrushCells] = useState(1);
+  const [showGrid, setShowGrid] = useState(true);
+
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.error(`Erro ao tentar ativar tela cheia: ${err.message}`);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
 
   useKeyboard(isPanMode, setIsPanModeSync, permissions, setActiveTool, undoLast);
 
@@ -5442,7 +5486,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select
       onTouchMove={(e) => { if(e.touches.length === 1) { cameraHandlers.onMouseMove({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }); } }}
       onTouchEnd={(e) => stopPan(e)}
     >
-      <GridLines camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
+      {showGrid && <GridLines camera={camera} cellSize={cellSize} width={size.width} height={size.height} />}
 
       <TerrainLayer zones={zones} camera={camera} cellSize={cellSize} width={size.width} height={size.height} />
 
@@ -5493,7 +5537,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select
       <RoleBadge role={role} />
       <CameraControls camera={camera} setCamera={setCamera} />
 
-      {(permissions.canEdit || window.debugGM) && (
+            {(permissions.canEdit || window.debugGM) && (
         <GMToolbox
           activeTool={activeTool}       setActiveTool={setActiveTool}
           brushColor={brushColor}       setBrushColor={setBrushColor}
@@ -5506,7 +5550,10 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT, activeTool="select
           onAddToken={()=>setShowTokenModal(true)}
           activeTerrain={activeTerrain} setActiveTerrain={setActiveTerrain}
           terrainBrushCells={terrainBrushCells} setTerrainBrushCells={setTerrainBrushCells}
-          onClearZones={clearZones} />
+          onClearZones={clearZones}
+          showGrid={showGrid}           setShowGrid={setShowGrid}
+          onToggleFullScreen={toggleFullScreen}
+        />
       )}
 
       {showTokenModal && (permissions.canEdit || window.debugGM) && (
@@ -5661,24 +5708,32 @@ function HandoutGridLayer({ handoutData, onClose }) {
 function VTTApp() {
   const [role, setRole] = useState(() => (window.isMaster || window.debugGM) ? "GM" : "PLAYER");
   const [activeTool, setActiveTool] = useState("pan");
-  
+  const roleRef = useRef((window.isMaster || window.debugGM) ? "GM" : "PLAYER");
+
   useEffect(() => {
     const check = () => {
       const gm = !!(window.isMaster || window.debugGM);
-      if (gm && role !== "GM") setRole("GM");
-      else if (!gm && role === "GM") setRole("PLAYER");
+      const next = gm ? "GM" : "PLAYER";
+      if (next !== roleRef.current) {
+        roleRef.current = next;
+        setRole(next);
+      }
     };
-    window.forceGM = (v) => { window.debugGM = v; check(); };
-    window.addEventListener("grimorio:rolechange", (e) => {
+    const onRoleChange = (e) => {
       if (e.detail && typeof e.detail.isMaster !== "undefined") {
         window.isMaster = e.detail.isMaster;
-        check();
       }
-    });
-    const timer = setInterval(check, 1000);
+      check();
+    };
+    window.forceGM = (v) => { window.debugGM = v; check(); };
+    window.addEventListener("grimorio:rolechange", onRoleChange);
+    const timer = setInterval(check, 500);
     check();
-    return () => clearInterval(timer);
-  }, [role]);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("grimorio:rolechange", onRoleChange);
+    };
+  }, []);
 
   return (
     <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden", background: "#000" }}>
@@ -5756,12 +5811,15 @@ window._mountVTT = function() {
   }
   _vttRoot.render(<VTTApp />);
   // Re-dispara o role após render para garantir que o painel GM aparece corretamente
-  setTimeout(() => {
+  // Dois disparos: 80ms (render inicial) e 350ms (fallback para listeners lentos)
+  const fireRole = () => {
     window.dispatchEvent(new Event("resize"));
     if(typeof window.isMaster !== "undefined"){
       window.dispatchEvent(new CustomEvent('grimorio:rolechange', { detail: { isMaster: !!window.isMaster } }));
     }
-  }, 80);
+  };
+  setTimeout(fireRole, 80);
+  setTimeout(fireRole, 350);
 };
 window._unmountVTT = function() {
   if(_vttRoot){ _vttRoot.render(null); }
