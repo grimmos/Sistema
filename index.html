@@ -4129,7 +4129,8 @@ const MAP_DEFAULT_CELLS = 20;
 const FOG_BRUSH_CELLS   = [1, 2, 3, 5];
 
 function useRole(role) {
-  const isGM = role === "GM";
+  // Lê window.isMaster diretamente a cada render — fonte de verdade absoluta
+  const isGM = role === "GM" || window.isMaster === true || window.debugGM === true;
   return { isGM, canEdit:isGM, canDraw:isGM, canFog:isGM };
 }
 
@@ -5355,6 +5356,16 @@ function useKeyboard(isPanMode, setIsPanMode, permissions, setActiveTool, undoLa
 // ── VTTGrid principal ──
 function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
   const [activeTool, setActiveTool] = useState("pan");
+  // forceUpdate para garantir que useRole relê window.isMaster após mount
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    // Re-renderiza imediatamente e mais 3x nos primeiros segundos
+    // Garante que mesmo se role prop chegou errado, useRole se auto-corrige
+    const t1 = setTimeout(() => forceUpdate(n => n+1), 100);
+    const t2 = setTimeout(() => forceUpdate(n => n+1), 400);
+    const t3 = setTimeout(() => forceUpdate(n => n+1), 900);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
   const containerRef = useRef(null);
   const [size, setSize]         = useState({ width:800, height:600 });
   const [showRO, setShowRO]     = useState(false);
