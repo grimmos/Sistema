@@ -3956,6 +3956,7 @@ function MapImageLayer({ mapTransform, cellSize, cameraScale, canEdit, onUpdate 
   const dragging = useRef(false);
   const resizing = useRef(null);
   const ds       = useRef({});
+  const [hovered, setHovered] = React.useState(false);
   if(!mapTransform) return null;
   const px=mapTransform.x*cellSize, py=mapTransform.y*cellSize;
   const pw=mapTransform.w*cellSize, ph=mapTransform.h*cellSize;
@@ -3966,7 +3967,12 @@ function MapImageLayer({ mapTransform, cellSize, cameraScale, canEdit, onUpdate 
     dragging.current=true;
     ds.current={ mx:e.clientX, my:e.clientY, tx:mapTransform.x, ty:mapTransform.y };
     const sc = cameraScale;
-    const mv=(ev)=>{ if(!dragging.current)return; onUpdate({ x:ds.current.tx+(ev.clientX-ds.current.mx)/sc/cellSize, y:ds.current.ty+(ev.clientY-ds.current.my)/sc/cellSize }); };
+    const mv=(ev)=>{
+      if(!dragging.current)return;
+      const nx = ds.current.tx+(ev.clientX-ds.current.mx)/sc/cellSize;
+      const ny = ds.current.ty+(ev.clientY-ds.current.my)/sc/cellSize;
+      onUpdate({ x:nx, y:ny });
+    };
     const up=()=>{ dragging.current=false; window.removeEventListener("mousemove",mv); window.removeEventListener("mouseup",up); };
     window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
   };
@@ -3988,16 +3994,50 @@ function MapImageLayer({ mapTransform, cellSize, cameraScale, canEdit, onUpdate 
     window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
   };
 
-  const handles=[{id:"nw",cx:px,cy:py},{id:"n",cx:px+pw/2,cy:py},{id:"ne",cx:px+pw,cy:py},{id:"e",cx:px+pw,cy:py+ph/2},{id:"se",cx:px+pw,cy:py+ph},{id:"s",cx:px+pw/2,cy:py+ph},{id:"sw",cx:px,cy:py+ph},{id:"w",cx:px,cy:py+ph/2}];
+  const handles=[
+    {id:"nw",cx:px,    cy:py},    {id:"n",cx:px+pw/2,cy:py},    {id:"ne",cx:px+pw,cy:py},
+    {id:"e", cx:px+pw, cy:py+ph/2},                              {id:"w", cx:px,    cy:py+ph/2},
+    {id:"se",cx:px+pw, cy:py+ph}, {id:"s",cx:px+pw/2,cy:py+ph}, {id:"sw",cx:px,    cy:py+ph},
+  ];
   const cur={nw:"nw-resize",n:"n-resize",ne:"ne-resize",e:"e-resize",se:"se-resize",s:"s-resize",sw:"sw-resize",w:"w-resize"};
+  const cornerHandles = new Set(["nw","ne","se","sw"]);
 
   return (
     <g style={{ pointerEvents:canEdit?"auto":"none" }}>
-      <image href={mapTransform.src} x={px} y={py} width={pw} height={ph} preserveAspectRatio="xMidYMid meet" style={{ cursor:canEdit?"move":"default" }} onMouseDown={onImgDown} />
-      {canEdit && <rect x={px} y={py} width={pw} height={ph} fill="none" stroke="rgba(80,180,255,0.7)" strokeWidth={1.5} strokeDasharray="6 3" style={{ pointerEvents:"none" }} />}
-      {canEdit && handles.map(({id,cx,cy})=>(
-        <rect key={id} x={cx-5} y={cy-5} width={10} height={10} rx={2} fill="rgba(30,140,255,0.9)" stroke="#fff" strokeWidth={1} style={{ cursor:cur[id] }} onMouseDown={onHandleDown(id)} />
-      ))}
+      <image href={mapTransform.src} x={px} y={py} width={pw} height={ph}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ cursor:canEdit?"move":"default" }}
+        onMouseDown={onImgDown}
+        onMouseEnter={()=>setHovered(true)}
+        onMouseLeave={()=>setHovered(false)}
+      />
+      {/* Borda de seleção */}
+      {canEdit && <rect x={px} y={py} width={pw} height={ph} fill="none"
+        stroke={hovered||dragging.current?"rgba(80,200,255,0.9)":"rgba(80,180,255,0.55)"}
+        strokeWidth={hovered||dragging.current?2:1.5} strokeDasharray="6 3"
+        style={{ pointerEvents:"none" }} />}
+      {/* Handles */}
+      {canEdit && handles.map(({id,cx,cy})=>{
+        const isCorner = cornerHandles.has(id);
+        const size = isCorner ? 12 : 9;
+        return (
+          <rect key={id}
+            x={cx-size/2} y={cy-size/2} width={size} height={size} rx={isCorner?3:2}
+            fill={isCorner?"rgba(40,160,255,0.95)":"rgba(80,200,255,0.8)"}
+            stroke="#fff" strokeWidth={1.5}
+            style={{ cursor:cur[id], filter:"drop-shadow(0 1px 3px rgba(0,0,0,0.5))" }}
+            onMouseDown={onHandleDown(id)}
+          />
+        );
+      })}
+      {/* Label de dimensões ao arrastar */}
+      {canEdit && (dragging.current||resizing.current) && (
+        <text x={px+pw/2} y={py-8} textAnchor="middle"
+          fill="rgba(80,200,255,0.9)" fontSize={11} fontFamily="monospace"
+          style={{ pointerEvents:"none", filter:"drop-shadow(0 1px 2px rgba(0,0,0,0.8))" }}>
+          {Math.round(mapTransform.w)}×{Math.round(mapTransform.h)} células
+        </text>
+      )}
     </g>
   );
 }
@@ -4532,15 +4572,35 @@ function AreaMarkersLayer({ markers, camera, cellSize }) {
   );
 }
 
-// ── GMToolbox (redesenhado) ──
+// ── GMToolbox (draggável) ──
 function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brushSize, setBrushSize, fogBrushCells, setFogBrushCells, onMapUpload, onMapClear, hasMap, onUndoDraw, onClearDraw, onClearFog, onFillFog, onAddToken,
   initiative, setInitiative, pingActive, setPingActive,
   showNotes, setShowNotes, sessionNotes, setSessionNotes,
   measureActive, setMeasureActive, cellSize, measureResult,
-  areaMarkers, setAreaMarkers, mapChatOpen
+  areaMarkers, setAreaMarkers, mapChatOpen,
+  isPanMode, setIsPanMode
 }) {
   const fileRef = useRef(null);
   const [collapsed, setCollapsed] = React.useState(false);
+  // Drag da toolbar
+  const [pos, setPos] = React.useState({ x:12, y:12 });
+  const draggingTB = useRef(false);
+  const tbDragStart = useRef({});
+
+  const onTBDragStart = (e) => {
+    if (e.target.closest('button,input,textarea,select,label')) return;
+    draggingTB.current = true;
+    tbDragStart.current = { mx: e.clientX, my: e.clientY, px: pos.x, py: pos.y };
+    e.preventDefault();
+    const mv = (ev) => {
+      if (!draggingTB.current) return;
+      setPos({ x: tbDragStart.current.px + ev.clientX - tbDragStart.current.mx, y: tbDragStart.current.py + ev.clientY - tbDragStart.current.my });
+    };
+    const up = () => { draggingTB.current = false; window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', mv);
+    window.addEventListener('mouseup', up);
+  };
+
   // Area marker state
   const [areaShape, setAreaShape] = React.useState("circle");
   const [areaColor, setAreaColor] = React.useState(AREA_COLORS[0]);
@@ -4555,7 +4615,7 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
   const clearAreaMarkers = () => setAreaMarkers([]);
 
   if (collapsed) return (
-    <div style={{ position:"absolute", top:12, left:12, zIndex:20 }}>
+    <div style={{ position:"absolute", top:pos.y, left:pos.x, zIndex:20 }}>
       <button onClick={()=>setCollapsed(false)} title="Abrir ferramentas" style={{
         width:38, height:38, borderRadius:8, border:"1.5px solid rgba(201,149,42,0.45)",
         background:"rgba(22,16,8,0.96)", color:"rgba(201,149,42,0.85)", cursor:"pointer", fontSize:18,
@@ -4565,26 +4625,36 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
   );
 
   return (
-    <div style={{
-      position:"absolute", top:12, left:12, display:"flex", flexDirection:"column", gap:5, zIndex:20,
+    <div
+      onMouseDown={onTBDragStart}
+      style={{
+      position:"absolute", top:pos.y, left:pos.x, display:"flex", flexDirection:"column", gap:5, zIndex:20,
       maxHeight:"calc(100% - 70px)", overflowY:"auto", overflowX:"visible",
-      width:188,
-      scrollbarWidth:"thin", scrollbarColor:"rgba(201,149,42,0.15) transparent"
+      width:192,
+      scrollbarWidth:"thin", scrollbarColor:"rgba(201,149,42,0.15) transparent",
+      userSelect:"none"
     }}>
-      {/* Header da toolbar */}
+      {/* Header da toolbar — arraste aqui para mover */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"5px 8px",
         background:"rgba(22,16,8,0.98)", border:"1.5px solid rgba(201,149,42,0.45)", borderRadius:8,
-        boxShadow:"0 4px 18px rgba(0,0,0,0.65)" }}>
-        <span style={{ fontFamily:"'Cinzel',serif", fontSize:9, letterSpacing:"3px", color:"rgba(201,149,42,0.7)", textTransform:"uppercase" }}>✦ Mestre</span>
+        boxShadow:"0 4px 18px rgba(0,0,0,0.65)", cursor:"grab" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ color:"rgba(201,149,42,0.3)", fontSize:12, letterSpacing:"1px", lineHeight:1, userSelect:"none" }}>⠿</span>
+          <span style={{ fontFamily:"'Cinzel',serif", fontSize:9, letterSpacing:"3px", color:"rgba(201,149,42,0.7)", textTransform:"uppercase" }}>✦ Mestre</span>
+        </div>
         <button onClick={()=>setCollapsed(true)} title="Recolher" style={{ background:"transparent",border:"none",color:"rgba(201,149,42,0.35)",cursor:"pointer",fontSize:13,padding:"1px 4px" }}>◀</button>
       </div>
 
       {/* Ferramentas principais */}
       <ToolSection label="Ferramenta" icon="🔧" defaultOpen={true} accent={true}>
         <div style={{ display:"flex", gap:4 }}>
-          <ToolBtn active={activeTool==="select"} onClick={()=>setActiveTool("select")} icon="↖" label="Mover" />
+          <ToolBtn active={activeTool==="select"} onClick={()=>setActiveTool("select")} icon="↖" label="Selec." />
+          <ToolBtn active={isPanMode} onClick={()=>setIsPanMode(!isPanMode)} icon="✋" label="Mover" color="#60c0ff" />
           <ToolBtn active={activeTool==="draw"}   onClick={()=>setActiveTool("draw")}   icon="✏" label="Caneta" />
           <ToolBtn active={activeTool==="fog"}    onClick={()=>setActiveTool("fog")}    icon="🌫" label="Névoa" color="#c080ff" />
+        </div>
+        <div style={{ fontSize:9, color:"rgba(201,149,42,0.35)", fontStyle:"italic", paddingTop:1 }}>
+          {isPanMode ? "✋ Arraste para mover o mapa" : activeTool==="select" ? "↖ Clique e arraste tokens" : activeTool==="fog" ? "🌫 Esq: cobrir · Dir: revelar" : "✏ Desenhe no mapa"}
         </div>
       </ToolSection>
 
@@ -4636,7 +4706,14 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
       {/* Mapa de Fundo */}
       <ToolSection label="Mapa de Fundo" icon="🗺" defaultOpen={false}>
         <button onClick={()=>fileRef.current?.click()} style={{ padding:"5px 0",borderRadius:5,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(30,30,30,0.75)",color:"#e0ddd8",cursor:"pointer",fontSize:11,width:"100%" }}>📂 Carregar imagem</button>
-        {hasMap && <button onClick={onMapClear} style={{ padding:"5px 0",borderRadius:5,border:"1px solid rgba(220,60,40,0.4)",background:"rgba(160,30,10,0.2)",color:"#f09080",cursor:"pointer",fontSize:11,width:"100%" }}>🗑 Remover mapa</button>}
+        {hasMap && (
+          <>
+            <div style={{ fontSize:9, color:"rgba(80,200,255,0.7)", fontStyle:"italic", paddingTop:1 }}>
+              ↖ Selecione a ferramenta "Selec." para mover/redimensionar o mapa
+            </div>
+            <button onClick={onMapClear} style={{ padding:"5px 0",borderRadius:5,border:"1px solid rgba(220,60,40,0.4)",background:"rgba(160,30,10,0.2)",color:"#f09080",cursor:"pointer",fontSize:11,width:"100%" }}>🗑 Remover mapa</button>
+          </>
+        )}
         {!hasMap && <span style={{ fontSize:10, color:"rgba(201,149,42,0.4)", fontStyle:"italic" }}>Sem mapa carregado</span>}
         <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={(e)=>{ onMapUpload(e.target.files[0]); e.target.value=""; }} />
       </ToolSection>
@@ -5027,6 +5104,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
           cellSize={cellSize}           measureResult={measureResult}
           areaMarkers={areaMarkers}     setAreaMarkers={setAreaMarkers}
           mapChatOpen={mapChatOpen}
+          isPanMode={isPanMode}         setIsPanMode={setIsPanModeSync}
         />
       )}
 
@@ -5038,8 +5116,8 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
 
       {/* Indicador de pan */}
       {isPanMode && (
-        <div style={{ position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",background:"rgba(30,30,30,0.75)",color:"#ccc",padding:"4px 14px",borderRadius:6,fontSize:12,pointerEvents:"none",zIndex:30 }}>
-          Modo Pan — arraste para mover
+        <div style={{ position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",background:"rgba(20,50,90,0.9)",color:"#80c8ff",padding:"5px 16px",borderRadius:8,fontSize:12,pointerEvents:"none",zIndex:30,border:"1px solid rgba(80,160,255,0.5)",boxShadow:"0 2px 12px rgba(0,0,0,0.5)",whiteSpace:"nowrap" }}>
+          ✋ Modo Mover — arraste para navegar · Espaço para soltar
         </div>
       )}
 
