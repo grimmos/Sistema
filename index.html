@@ -5060,14 +5060,16 @@ const AREA_SHAPES = [
 ];
 const AREA_COLORS = ["#e05252","#52c47a","#5278e0","#e09a3a","#d4c84a","#9a52e0"];
 
-function AreaMarkersLayer({ markers, camera, cellSize, isGM, onUpdateMarker, onRemoveMarker }) {
+function AreaMarkersLayer({ markers, camera, cellSize, isGM, activeTool, onUpdateMarker, onRemoveMarker }) {
   const dragging = React.useRef(null);
   const ds = React.useRef({});
   const [hoveredId, setHoveredId] = React.useState(null);
   const [draggingId, setDraggingId] = React.useState(null);
 
+  const canInteract = isGM && activeTool === "select";
+
   const onMarkerDown = (e, m) => {
-    if (!isGM) return;
+    if (!canInteract) return;
     e.stopPropagation();
     dragging.current = m.id;
     setDraggingId(m.id);
@@ -5090,7 +5092,7 @@ function AreaMarkersLayer({ markers, camera, cellSize, isGM, onUpdateMarker, onR
   };
 
   return (
-    <svg style={{ position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents: isGM ? "auto" : "none",zIndex:11 }}>
+    <svg style={{ position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:11 }}>
       {markers.map(m => {
         const cx = m.cx*cellSize*camera.scale + camera.x;
         const cy = m.cy*cellSize*camera.scale + camera.y;
@@ -5100,10 +5102,10 @@ function AreaMarkersLayer({ markers, camera, cellSize, isGM, onUpdateMarker, onR
         const isDrag = draggingId === m.id;
         const strokeW = isHov || isDrag ? 2.5 : 1.5;
         const commonProps = {
-          onMouseEnter: () => isGM && setHoveredId(m.id),
-          onMouseLeave: () => isGM && setHoveredId(null),
+          onMouseEnter: () => canInteract && setHoveredId(m.id),
+          onMouseLeave: () => canInteract && setHoveredId(null),
           onMouseDown:  (e) => onMarkerDown(e, m),
-          style: { cursor: isGM ? (isDrag ? "grabbing" : "grab") : "default" }
+          style: { pointerEvents: canInteract ? "auto" : "none", cursor: canInteract ? (isDrag ? "grabbing" : "grab") : "default" }
         };
 
         let shape = null;
@@ -5151,8 +5153,8 @@ function AreaMarkersLayer({ markers, camera, cellSize, isGM, onUpdateMarker, onR
           <g key={m.id}>
             {shape}
             {/* Botão de remover ao passar o mouse (só GM) */}
-            {isGM && isHov && !isDrag && (
-              <g style={{ cursor:"pointer" }} onMouseDown={(e)=>{ e.stopPropagation(); onRemoveMarker(m.id); }}>
+            {canInteract && isHov && !isDrag && (
+              <g style={{ cursor:"pointer", pointerEvents:"auto" }} onMouseDown={(e)=>{ e.stopPropagation(); onRemoveMarker(m.id); }}>
                 <circle cx={cx+r*0.7} cy={cy-r*0.7} r={9} fill="rgba(180,40,20,0.9)" stroke="#fff" strokeWidth={1} />
                 <text x={cx+r*0.7} y={cy-r*0.7+4} textAnchor="middle" fill="#fff" fontSize={12} fontWeight="bold" style={{pointerEvents:"none"}}>✕</text>
               </g>
@@ -5643,7 +5645,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
 
       <TokenLayer tokens={tokens} camera={camera} cellSize={cellSize} isGM={permissions.isGM} onUpdate={updateToken} onRemove={removeToken} activeTool={activeTool} />
 
-      <AreaMarkersLayer markers={areaMarkers} camera={camera} cellSize={cellSize} isGM={permissions.isGM} onUpdateMarker={updateAreaMarker} onRemoveMarker={removeAreaMarker} />
+      <AreaMarkersLayer markers={areaMarkers} camera={camera} cellSize={cellSize} isGM={permissions.isGM} activeTool={activeTool} onUpdateMarker={updateAreaMarker} onRemoveMarker={removeAreaMarker} />
 
       {permissions.canFog && activeTool==="fog" && !isPanMode && (
         <FogPaintCanvas camera={camera} cellSize={cellSize} width={size.width} height={size.height}
