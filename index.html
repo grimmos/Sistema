@@ -1531,6 +1531,96 @@ select.chat-whisper-target {
 }
 .chat-hidden-notice.show { display:flex; }
 .chat-hidden-notice p { font-family:'Cinzel',serif; font-size:10px; letter-spacing:2px; color:rgba(201,149,42,.3); text-align:center; text-transform:uppercase; }
+
+/* ── Painel de Perícias no Chat ── */
+#chat-pericias-pane {
+  display:none; flex-direction:column; flex:1; overflow-y:auto;
+  scrollbar-width:thin; scrollbar-color:rgba(201,149,42,.15) transparent;
+}
+#chat-pericias-pane::-webkit-scrollbar { width:3px; }
+#chat-pericias-pane::-webkit-scrollbar-thumb { background:rgba(201,149,42,.18); border-radius:2px; }
+.chat-perica-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 12px; border-bottom:1px solid rgba(201,149,42,.07);
+  gap:8px; transition:background .12s;
+}
+.chat-perica-row:hover { background:rgba(201,149,42,.04); }
+.chat-perica-name {
+  font-family:'Cinzel',serif; font-size:11px; color:var(--gold2);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0;
+}
+.chat-perica-meta {
+  font-family:'Cinzel',serif; font-size:8px; color:rgba(201,149,42,.38);
+  letter-spacing:1px; margin-top:2px;
+}
+.chat-perica-dice {
+  display:flex; gap:3px; flex-shrink:0;
+}
+.chat-perica-die-pip {
+  width:16px; height:16px; border-radius:3px;
+  background:rgba(201,149,42,.08); border:1px solid rgba(201,149,42,.22);
+  display:flex; align-items:center; justify-content:center;
+  font-size:9px; color:rgba(201,149,42,.55);
+}
+.chat-perica-roll-btn {
+  font-family:'Cinzel',serif; font-size:9px; letter-spacing:1px;
+  padding:5px 10px; border-radius:3px; cursor:pointer; text-transform:uppercase;
+  border:1px solid rgba(201,149,42,.35); background:rgba(201,149,42,.08);
+  color:var(--gold2); transition:all .15s; white-space:nowrap; flex-shrink:0;
+}
+.chat-perica-roll-btn:hover { background:rgba(201,149,42,.2); border-color:var(--gold2); }
+.chat-perica-roll-btn:active { background:rgba(201,149,42,.32); transform:scale(.96); }
+.chat-perica-header {
+  padding:6px 12px; font-family:'Cinzel',serif; font-size:9px;
+  letter-spacing:2px; color:rgba(201,149,42,.35); text-transform:uppercase;
+  border-bottom:1px solid rgba(201,149,42,.12); background:rgba(201,149,42,.03);
+  text-align:center; flex-shrink:0;
+}
+
+/* ── Ferramentas do Mestre — melhoradas ── */
+.master-sk-card {
+  background:rgba(10,6,2,.6); border:1px solid rgba(201,149,42,.15);
+  border-radius:4px; padding:10px 12px; margin-bottom:8px;
+  transition:border-color .15s;
+}
+.master-sk-card:hover { border-color:rgba(201,149,42,.3); }
+.master-sk-top {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:8px; flex-wrap:wrap; margin-bottom:8px;
+}
+.master-sk-name-lbl {
+  font-family:'Cinzel',serif; font-size:13px; color:var(--gold2);
+  flex:1; min-width:0;
+}
+.master-sk-level-badge {
+  font-family:'Cinzel',serif; font-size:9px; letter-spacing:1px;
+  padding:2px 8px; border-radius:10px; background:rgba(201,149,42,.1);
+  border:1px solid rgba(201,149,42,.25); color:rgba(201,149,42,.7);
+}
+.master-sk-level-badge.lv5 { background:rgba(201,149,42,.2); border-color:var(--gold2); color:var(--gold2); }
+.master-sk-controls {
+  display:flex; align-items:center; gap:5px; flex-wrap:wrap;
+}
+.master-sk-sep {
+  width:1px; height:18px; background:rgba(201,149,42,.15); margin:0 2px;
+}
+.master-sk-dice-row {
+  display:flex; gap:4px; margin-bottom:7px;
+}
+.master-sk-die-pip {
+  width:20px; height:20px; border-radius:4px;
+  background:rgba(201,149,42,.08); border:1px solid rgba(201,149,42,.2);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Cinzel Decorative',serif; font-size:10px; color:rgba(201,149,42,.5);
+}
+.master-sk-roll-btn {
+  font-family:'Cinzel',serif; font-size:9px; letter-spacing:1px;
+  padding:4px 9px; border-radius:3px; cursor:pointer; text-transform:uppercase;
+  border:1px solid rgba(80,180,220,.35); background:rgba(20,60,100,.15);
+  color:rgba(120,200,255,.75); transition:all .15s; white-space:nowrap;
+}
+.master-sk-roll-btn:hover { background:rgba(20,60,100,.35); border-color:rgba(80,180,220,.6); color:rgba(160,220,255,.9); }
+.master-sk-roll-btn:active { background:rgba(20,60,100,.5); }
 </style>
 
 <div id="chat-fab" onclick="toggleChat()">
@@ -1561,6 +1651,12 @@ select.chat-whisper-target {
     </div>
   </div>
 
+  <!-- Abas: Dados / Perícias -->
+  <div class="chat-tabs">
+    <button class="chat-tab-btn active" id="ctab-dados" onclick="showChatTab('dados')">⚄ Dados</button>
+    <button class="chat-tab-btn" id="ctab-pericias" onclick="showChatTab('pericias')">✦ Perícias</button>
+  </div>
+
   <!-- Aviso para jogadores quando oculto -->
   <div class="chat-hidden-notice" id="chat-hidden-notice">
     <p>⟡</p>
@@ -1571,6 +1667,9 @@ select.chat-whisper-target {
   <div id="chat-msgs">
     <p class="chat-empty" id="chat-empty">Nenhuma mensagem ainda...<br><span style="font-size:9px;opacity:.5;">Role dados ou envie uma mensagem</span></p>
   </div>
+
+  <!-- Painel de Perícias -->
+  <div id="chat-pericias-pane"></div>
 
   <!-- Input area -->
   <div class="chat-input-area" id="chat-input-area">
@@ -1587,7 +1686,7 @@ select.chat-whisper-target {
       <button class="chat-dice-btn special" onclick="showCustomRollUI()" title="Fórmula personalizada">⚙ Custom</button>
     </div>
     <!-- Custom roll row (oculto por padrão) -->
-    <div id="chat-custom-row" style="display:none;margin-bottom:7px;display:none;">
+    <div id="chat-custom-row" style="display:none;margin-bottom:7px;">
       <div style="display:flex;gap:5px;align-items:center;">
         <input id="chat-custom-inp" class="chat-txt-inp" style="min-height:30px;max-height:30px;font-family:'Cinzel',serif;font-size:11px;" placeholder="ex: 2d6+3, 1d20-1..." maxlength="20">
         <button class="chat-send-btn" style="padding:7px 10px;" onclick="sendCustomRoll()">🎲</button>
@@ -2364,36 +2463,65 @@ function renderSkillsMaster(p){
   const list=$('skill-list'); list.innerHTML='';
   const skills=p.skills||[{id:'fazer-algo',name:'Fazer Algo',level:1,rolling:false}];
 
-  // cabeçalho de adição
+  // ─── Cabeçalho de adição ───
   const addRow=document.createElement('div');
-  addRow.style.cssText='display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;';
+  addRow.style.cssText='background:rgba(10,6,2,.55);border:1px solid rgba(201,149,42,.2);border-radius:4px;padding:10px 12px;margin-bottom:14px;';
   addRow.innerHTML=`
-    <input id="master-sk-name" class="desc-inp" type="text" placeholder="Nome da perícia..." maxlength="30" autocomplete="off" style="flex:1;min-width:120px;">
-    <select id="master-sk-lvl" class="qty-inp" style="width:70px;">
-      <option value="2">Nv II</option><option value="3">Nv III</option><option value="4">Nv IV</option><option value="5">Nv V</option>
-    </select>
-    <button class="add-btn" onclick="masterAddSkill()">+</button>`;
+    <div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;color:rgba(201,149,42,.45);text-transform:uppercase;margin-bottom:8px;">✦ Adicionar Perícia</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input id="master-sk-name" class="desc-inp" type="text" placeholder="Nome da perícia..." maxlength="30" autocomplete="off" style="flex:1;min-width:120px;">
+      <select id="master-sk-lvl" class="qty-inp" style="width:70px;">
+        <option value="2">Nv II</option><option value="3">Nv III</option><option value="4">Nv IV</option><option value="5">Nv V</option>
+      </select>
+      <button class="add-btn" onclick="masterAddSkill()" style="padding:6px 14px;">+ Adicionar</button>
+    </div>`;
   list.appendChild(addRow);
 
-  skills.forEach((sk,idx)=>{
+  // ─── Separador ───
+  const sep=document.createElement('div');
+  sep.style.cssText='font-family:\'Cinzel\',serif;font-size:9px;letter-spacing:2px;color:rgba(201,149,42,.35);text-transform:uppercase;margin-bottom:10px;';
+  sep.textContent='✦ Perícias do Jogador ('+skills.length+')';
+  list.appendChild(sep);
+
+  skills.forEach(sk=>{
     const max=sk.level>=5;
     const isFazerAlgo=sk.id==='fazer-algo';
-    const card=document.createElement('div');
-    card.style.cssText='background:rgba(10,6,2,.55);border:1px solid rgba(201,149,42,.18);border-radius:3px;padding:10px 12px;margin-bottom:8px;';
     const curMod=sk.modifier||0;
+
+    const card=document.createElement('div');
+    card.className='master-sk-card';
+
+    // Pips dos dados
+    let dipsHtml='';
+    for(let i=0;i<sk.level;i++) dipsHtml+=`<div class="master-sk-die-pip">⚄</div>`;
+
+    const lvlBadgeClass='master-sk-level-badge'+(max?' lv5':'');
+    const modColor=curMod<0?'#e08080':curMod>0?'#80d080':'rgba(201,149,42,.5)';
+
     card.innerHTML=`
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-        <span style="font-family:'Cinzel',serif;font-size:13px;color:var(--gold2);">${esc(sk.name)}${isFazerAlgo?' <span style="font-size:9px;color:rgba(201,149,42,.4);">🔒 Nv I fixo</span>':''}</span>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <button class="roll-btn" style="padding:4px 8px;font-size:9px;" onclick="masterSkillLevel('${sk.id}',-1)" ${sk.level<=1||isFazerAlgo?'disabled':''}>−</button>
-          <span style="font-family:'Cinzel',serif;font-size:11px;color:rgba(201,149,42,.7);min-width:70px;text-align:center;">${LVL_LBL[sk.level]}</span>
-          <button class="roll-btn" style="padding:4px 8px;font-size:9px;" onclick="masterSkillLevel('${sk.id}',+1)" ${max||isFazerAlgo?'disabled':''}>+</button>
-          <span style="font-family:'Cinzel',serif;font-size:9px;color:rgba(201,149,42,.4);letter-spacing:1px;margin-left:6px;">MOD</span>
-          <button class="roll-btn" style="padding:4px 7px;font-size:9px;" onclick="masterSkillModifier('${sk.id}',-1)">−</button>
-          <span id="skmod-${sk.id}" style="font-family:'Cinzel',serif;font-size:11px;min-width:28px;text-align:center;color:${curMod<0?'#e08080':curMod>0?'#80d080':'rgba(201,149,42,.5)'};">${curMod>0?'+':''}${curMod}</span>
-          <button class="roll-btn" style="padding:4px 7px;font-size:9px;" onclick="masterSkillModifier('${sk.id}',+1)">+</button>
-          <button class="wound-rm" onclick="masterRemoveSkill('${sk.id}')" style="margin-left:4px;">✕</button>
+      <div class="master-sk-top">
+        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
+          <span class="master-sk-name-lbl">${esc(sk.name)}</span>
+          ${isFazerAlgo?'<span style="font-size:9px;color:rgba(201,149,42,.3);">🔒</span>':''}
         </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="${lvlBadgeClass}">${LVL_LBL[sk.level]}</span>
+          ${!isFazerAlgo?`<button class="wound-rm" onclick="masterRemoveSkill('${sk.id}')" title="Remover perícia">✕</button>`:''}
+        </div>
+      </div>
+      <div class="master-sk-dice-row">${dipsHtml}</div>
+      <div class="master-sk-controls">
+        <span style="font-family:'Cinzel',serif;font-size:9px;color:rgba(201,149,42,.4);letter-spacing:1px;">NÍV.</span>
+        <button class="roll-btn" style="padding:3px 9px;font-size:9px;" onclick="masterSkillLevel('${sk.id}',-1)" ${sk.level<=1||isFazerAlgo?'disabled':''}>−</button>
+        <span style="font-family:'Cinzel Decorative',serif;font-size:14px;color:var(--gold2);min-width:20px;text-align:center;">${sk.level}</span>
+        <button class="roll-btn" style="padding:3px 9px;font-size:9px;" onclick="masterSkillLevel('${sk.id}',+1)" ${max||isFazerAlgo?'disabled':''}>+</button>
+        <div class="master-sk-sep"></div>
+        <span style="font-family:'Cinzel',serif;font-size:9px;color:rgba(201,149,42,.4);letter-spacing:1px;">MOD.</span>
+        <button class="roll-btn" style="padding:3px 8px;font-size:9px;" onclick="masterSkillModifier('${sk.id}',-1)">−</button>
+        <span id="skmod-${sk.id}" style="font-family:'Cinzel Decorative',serif;font-size:13px;min-width:26px;text-align:center;color:${modColor};">${curMod>0?'+':''}${curMod}</span>
+        <button class="roll-btn" style="padding:3px 8px;font-size:9px;" onclick="masterSkillModifier('${sk.id}',+1)">+</button>
+        <div class="master-sk-sep"></div>
+        <button class="master-sk-roll-btn" onclick="masterRollSkill('${sk.id}')">⚄ Rolar ${sk.level}d6</button>
       </div>`;
     list.appendChild(card);
   });
@@ -2439,6 +2567,52 @@ function masterRemoveSkill(skId){
   p.skills.splice(idx,1);
   renderSkillsMaster(p); schSave();
   toast('Perícia "'+name+'" removida.');
+}
+
+function masterRollSkill(skId){
+  const p = targetOrWarn(); if(!p || !p.skills) return;
+  const sk = p.skills.find(s=>s.id===skId); if(!sk) return;
+
+  const res=[];
+  for(let i=0;i<sk.level;i++) res.push(Math.floor(Math.random()*6)+1);
+  const best  = Math.max(...res);
+  const sixes = res.filter(r=>r===6).length;
+  const mod   = sk.modifier||0;
+  const hasAnyMod = mod!==0;
+  const finalResult = best + mod;
+
+  let resultText, resultClass;
+  const allSixes = sixes >= sk.level;
+
+  if(sk.id==='fazer-algo' && sixes>=1){
+    resultClass='r-crit'; resultText='✦ Crítico! ('+sk.name+') — Resultado '+(hasAnyMod?finalResult:best);
+  } else if(allSixes && sk.level<5 && sk.id!=='fazer-algo'){
+    resultClass='r-crit'; resultText='✦✦ '+sk.name+' — Todos 6! Resultado '+(hasAnyMod?finalResult:best);
+  } else if(sixes===1 && sk.id!=='fazer-algo'){
+    resultClass='r-crit'; resultText='✦ Crítico! Resultado '+(hasAnyMod?finalResult:best)+(hasAnyMod?' (mod '+( mod>0?'+':'')+mod+')':'');
+  } else if(best>=4){
+    resultClass='r-good'; resultText='Sucesso — Resultado '+(hasAnyMod?finalResult:best);
+  } else {
+    resultClass='r-norm'; resultText='Resultado '+(hasAnyMod?finalResult:best);
+  }
+
+  // Postar no chat como o Mestre rolando pelo jogador
+  const playerName = p.charName||p.name||'Jogador';
+  const msg = {
+    type       : 'roll',
+    playerName : '✦ Mestre ('+playerName+')',
+    playerId   : myId,
+    isMaster   : true,
+    skillName  : sk.name,
+    dice       : res,
+    resultText : resultText,
+    resultClass: resultClass,
+    ts         : Date.now()
+  };
+  if(firebaseOK && salaId){
+    db.ref('salas/'+salaId+'/chat').push(msg);
+  }
+  toast('⚄ '+sk.name+': '+resultText.slice(0,40));
 }
 
 /* ═══════════════════════════════
@@ -3184,6 +3358,10 @@ function toggleChat(){
     chatUnread = 0;
     updateChatBadge();
     scrollChatToBottom();
+    // Atualizar painel de perícias se estiver ativo
+    if($('ctab-pericias') && $('ctab-pericias').classList.contains('active')){
+      renderChatPericiasPane();
+    }
   }
 }
 
@@ -3360,6 +3538,135 @@ function clearChatLocal(){
   chatRenderedIds.clear(); chatUnread=0; updateChatBadge();
   const msgs=$('chat-msgs');
   if(msgs) msgs.innerHTML='<p class="chat-empty" id="chat-empty">Chat limpo localmente.<br><span style="font-size:9px;opacity:.5;">Novas mensagens aparecerão aqui</span></p>';
+}
+
+/* ── Controlo das abas do chat ── */
+function showChatTab(tab){
+  const isDados = tab === 'dados';
+  const tabDados  = $('ctab-dados');
+  const tabPeric  = $('ctab-pericias');
+  const msgs      = $('chat-msgs');
+  const inp       = $('chat-input-area');
+  const pericPane = $('chat-pericias-pane');
+  if(tabDados)  tabDados.classList.toggle('active', isDados);
+  if(tabPeric)  tabPeric.classList.toggle('active', !isDados);
+  if(msgs)      msgs.style.display = isDados ? 'flex' : 'none';
+  if(inp)       inp.style.display  = isDados ? 'block' : 'none';
+  if(pericPane){
+    pericPane.style.display = isDados ? 'none' : 'flex';
+    if(!isDados) renderChatPericiasPane();
+  }
+}
+
+/* ── Renderizar lista de perícias no painel do chat ── */
+function renderChatPericiasPane(){
+  const pane = $('chat-pericias-pane');
+  if(!pane) return;
+  pane.innerHTML = '';
+
+  const p = isMaster ? vd() : me();
+  if(!p || !p.skills || !p.skills.length){
+    pane.innerHTML = '<p class="chat-empty">Nenhuma perícia disponível.<br><span style="font-size:9px;opacity:.5;">Aguardando jogador na sala</span></p>';
+    return;
+  }
+
+  const playerLabel = isMaster ? (p.charName||p.name||'Jogador') : (p.charName||p.name||'');
+  if(playerLabel){
+    const hdr = document.createElement('div');
+    hdr.className = 'chat-perica-header';
+    hdr.textContent = (isMaster ? '✦ Ficha de ' : '✦ ') + playerLabel;
+    pane.appendChild(hdr);
+  }
+
+  p.skills.forEach(sk => {
+    const row = document.createElement('div');
+    row.className = 'chat-perica-row';
+    const diceStr = sk.level + 'd6';
+    let dipsHtml = '';
+    for(let i=0;i<sk.level;i++) dipsHtml += '<div class="chat-perica-die-pip">⚄</div>';
+    row.innerHTML = `
+      <div style="flex:1;min-width:0;">
+        <div class="chat-perica-name">${esc(sk.name)}</div>
+        <div class="chat-perica-meta">${LVL_LBL[sk.level]||''} · ${diceStr}${sk.modifier&&sk.modifier!==0?' · Mod '+(sk.modifier>0?'+':'')+sk.modifier:''}</div>
+      </div>
+      <div class="chat-perica-dice">${dipsHtml}</div>
+      <button class="chat-perica-roll-btn" onclick="chatRollSkill('${sk.id}')">⚄ Rolar</button>`;
+    pane.appendChild(row);
+  });
+}
+
+/* ── Rolar perícia a partir do chat ── */
+function chatRollSkill(skId){
+  if(!isMaster && !isMe()){ toast('Só podes rolar os teus próprios dados!'); return; }
+  const p = isMaster ? vd() : me();
+  if(!p || !p.skills){ toast('Sem ficha disponível.'); return; }
+  const sk = p.skills.find(s=>s.id===skId);
+  if(!sk){ toast('Perícia não encontrada.'); return; }
+
+  // Rolar dados
+  const res = [];
+  for(let i=0;i<sk.level;i++) res.push(Math.floor(Math.random()*6)+1);
+  const best   = Math.max(...res);
+  const sixes  = res.filter(r=>r===6).length;
+  const pnPen  = isMaster ? 0 : pen(p.totalStrikes||0);
+  const mod    = sk.modifier||0;
+  const hasAnyMod = pnPen>0||mod!==0;
+  const finalResult = best - pnPen + mod;
+
+  let resultText, resultClass;
+
+  if(sk.id==='fazer-algo' && sixes>=1){
+    resultClass = 'r-crit';
+    resultText  = '✦ Crítico! Nova perícia desbloqueada!';
+    if(!isMaster){
+      $('modal-new-inp').value='';
+      $('modal-new').classList.remove('hidden');
+      setTimeout(()=>$('modal-new-inp').focus(),100);
+    }
+  } else {
+    const allSixes = sixes >= sk.level;
+    if(allSixes && sk.level<5 && sk.id!=='fazer-algo'){
+      const newLvl = Math.min(5, sk.level+1);
+      resultClass = 'r-crit';
+      resultText  = '✦✦ '+sk.name+' → '+LVL_LBL[newLvl];
+      if(!isMaster){
+        const mySk = (me().skills||[]).find(s=>s.id===skId);
+        if(mySk){
+          mySk.level = newLvl;
+          mySk.lastRollResults=res; mySk.lastResult=resultText; mySk.lastResultClass=resultClass;
+          $('mup-name').textContent=mySk.name;
+          $('mup-txt').textContent=mySk.name+' avança para '+LVL_LBL[newLvl]+'! Agora você rola '+newLvl+'d6.';
+          $('modal-up').classList.remove('hidden');
+          schSave(); triggerNarrator(sk.name,'upgrade',newLvl);
+        }
+      }
+    } else if(sixes===1 && sk.id!=='fazer-algo'){
+      resultClass = 'r-crit';
+      resultText  = '✦ Crítico! Resultado '+(hasAnyMod?finalResult:best);
+      if(!isMaster) triggerNarrator(sk.name,'critical',best);
+    } else if(best>=4){
+      resultClass = 'r-good';
+      resultText  = 'Sucesso — Resultado '+(hasAnyMod?finalResult:best);
+    } else {
+      resultClass = 'r-norm';
+      resultText  = 'Resultado '+(hasAnyMod?finalResult:best);
+    }
+  }
+
+  // Guardar último resultado na ficha do jogador (só se for o próprio)
+  if(!isMaster && isMe()){
+    const mySk = (me().skills||[]).find(s=>s.id===skId);
+    if(mySk && sk.id!=='fazer-algo'){
+      mySk.lastRollResults=res; mySk.lastResult=resultText; mySk.lastResultClass=resultClass;
+      schSave();
+    }
+  }
+
+  // Publicar no chat
+  postRollToChat(sk.name, res, resultText, resultClass);
+
+  // Voltar para a aba Dados para ver o resultado
+  showChatTab('dados');
 }
 
 /* ── Atualizar lista de sussurros ── */
