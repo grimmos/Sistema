@@ -1621,6 +1621,92 @@ select.chat-whisper-target {
 }
 .master-sk-roll-btn:hover { background:rgba(20,60,100,.35); border-color:rgba(80,180,220,.6); color:rgba(160,220,255,.9); }
 .master-sk-roll-btn:active { background:rgba(20,60,100,.5); }
+
+/* ── Painel de Imagem do Mestre ── */
+.master-image-panel {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  background: rgba(0,0,0,0.75);
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.master-image-panel.show { display: flex; }
+.master-image-inner {
+  background: linear-gradient(160deg,#1a1008 0%,#0a0602 100%);
+  border: 1px solid rgba(201,149,42,.4);
+  border-radius: 6px;
+  padding: 20px;
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.master-image-title {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: var(--gold2);
+  text-transform: uppercase;
+  text-align: center;
+}
+.master-image-preview {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 4px;
+  border: 1px solid rgba(201,149,42,.3);
+  display: none;
+}
+.master-image-preview.show { display: block; }
+
+/* Overlay de imagem para jogadores */
+#player-image-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9600;
+  background: rgba(0,0,0,0.85);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+#player-image-overlay.show { display: flex; }
+#player-image-overlay img {
+  max-width: 90vw;
+  max-height: 75vh;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid rgba(201,149,42,.5);
+  box-shadow: 0 8px 40px rgba(0,0,0,.9);
+}
+.poi-title {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: rgba(201,149,42,.7);
+  text-transform: uppercase;
+  text-align: center;
+}
+.poi-close-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  padding: 8px 20px;
+  border: 1px solid rgba(201,149,42,.4);
+  background: rgba(201,149,42,.1);
+  color: var(--gold2);
+  border-radius: 3px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
 </style>
 
 <div id="chat-fab" onclick="toggleChat()">
@@ -1979,6 +2065,8 @@ function attachListener(){
   // Mostrar chat FAB e ligar listener do chat
   showChatFab();
   attachChatListener();
+  attachImageListener();
+  updateMasterChatExtras();
 }
 
 function detachListener(){
@@ -1987,6 +2075,7 @@ function detachListener(){
     dbListener = null;
   }
   detachChatListener();
+  detachImageListener();
   hideChatFab();
 }
 
@@ -3823,6 +3912,139 @@ function attachChatListener(){
   db.ref('salas/'+salaId+'/chat').push(systemMsg);
 }
 
+
+/* ═══════════════════════════════════════════════════
+   IMAGEM COMPARTILHADA DO MESTRE
+═══════════════════════════════════════════════════ */
+let masterImgDataUrl = null;
+let imageListener = null;
+
+function openMasterImagePanel() {
+  if(!isMaster){ toast('Apenas o Mestre pode enviar imagens.'); return; }
+  // Atualizar lista de jogadores alvo
+  const sel = $('master-img-target');
+  if(sel) {
+    // Manter "todos" como primeira opção
+    sel.innerHTML = '<option value="all">✦ Todos os jogadores</option>';
+    Object.entries(players).forEach(([pid, p]) => {
+      if(pid === myId) return; // mestre não envia para si mesmo
+      const opt = document.createElement('option');
+      opt.value = pid;
+      opt.textContent = p.charName || p.name || 'Jogador';
+      sel.appendChild(opt);
+    });
+  }
+  $('master-image-panel').classList.add('show');
+}
+
+function closeMasterImagePanel() {
+  $('master-image-panel').classList.remove('show');
+  masterImgDataUrl = null;
+  const prev = $('master-image-preview');
+  if(prev){ prev.src=''; prev.classList.remove('show'); }
+  const capRow = $('master-img-caption-row');
+  if(capRow) capRow.style.display = 'none';
+  const sendBtn = $('master-img-send-btn');
+  if(sendBtn){ sendBtn.disabled=true; sendBtn.style.opacity='.5'; }
+  const fi = $('master-img-file'); if(fi) fi.value='';
+}
+
+function previewMasterImage(evt) {
+  const file = evt.target.files[0];
+  if(!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    masterImgDataUrl = e.target.result;
+    const prev = $('master-image-preview');
+    if(prev){ prev.src = masterImgDataUrl; prev.classList.add('show'); }
+    const capRow = $('master-img-caption-row');
+    if(capRow) capRow.style.display = 'flex';
+    const sendBtn = $('master-img-send-btn');
+    if(sendBtn){ sendBtn.disabled=false; sendBtn.style.opacity='1'; }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function sendMasterImage() {
+  if(!isMaster || !masterImgDataUrl){ toast('Nenhuma imagem selecionada!'); return; }
+  if(!firebaseOK || !salaId){ toast('Sem conexão Firebase.'); return; }
+  const target = $('master-img-target') ? $('master-img-target').value : 'all';
+  const caption = $('master-img-caption') ? $('master-img-caption').value.trim() : '';
+  const sendBtn = $('master-img-send-btn');
+  if(sendBtn){ sendBtn.disabled=true; sendBtn.textContent='Enviando...'; }
+  try {
+    const payload = {
+      src: masterImgDataUrl,
+      caption: caption,
+      target: target,
+      ts: Date.now(),
+      masterId: myId
+    };
+    await db.ref('salas/' + salaId + '/masterImage').set(payload);
+    toast('✦ Imagem enviada!', 2500);
+    closeMasterImagePanel();
+  } catch(e) {
+    toast('Erro ao enviar imagem: ' + e.message);
+    if(sendBtn){ sendBtn.disabled=false; sendBtn.textContent='Enviar Imagem ✦'; sendBtn.style.opacity='1'; }
+  }
+}
+
+function attachImageListener() {
+  if(!firebaseOK || !salaId) return;
+  const ref = db.ref('salas/' + salaId + '/masterImage');
+  imageListener = ref.on('value', snap => {
+    if(!snap.exists()) return;
+    const data = snap.val();
+    if(!data || !data.src) return;
+    // Jogador só vê se for destinatário
+    if(isMaster) return; // mestre não vê o overlay
+    const isTarget = data.target === 'all' || data.target === myId;
+    if(!isTarget) return;
+    // Mostrar overlay
+    showPlayerImageOverlay(data.src, data.caption || '');
+  });
+}
+
+function detachImageListener() {
+  if(imageListener && firebaseOK && salaId) {
+    db.ref('salas/' + salaId + '/masterImage').off('value', imageListener);
+    imageListener = null;
+  }
+}
+
+function showPlayerImageOverlay(src, caption) {
+  const overlay = $('player-image-overlay');
+  const img = $('poi-img');
+  const cap = $('poi-caption');
+  if(!overlay || !img) return;
+  img.src = src;
+  if(cap) {
+    cap.textContent = caption;
+    cap.style.display = caption ? 'block' : 'none';
+  }
+  overlay.classList.add('show');
+}
+
+function closePlayerImageOverlay() {
+  const overlay = $('player-image-overlay');
+  if(overlay) overlay.classList.remove('show');
+}
+
+// Adicionar botão no chat para o mestre abrir painel de imagem
+function updateMasterChatExtras() {
+  const masterBar = $('chat-master-bar');
+  if(!masterBar || !isMaster) return;
+  if($('chat-img-btn')) return; // já existe
+  const btn = document.createElement('button');
+  btn.id = 'chat-img-btn';
+  btn.title = 'Enviar imagem aos jogadores';
+  btn.innerHTML = '🖼';
+  btn.style.cssText = 'background:transparent;border:1px solid rgba(201,149,42,.3);border-radius:4px;color:rgba(201,149,42,.65);font-size:14px;cursor:pointer;padding:3px 7px;transition:all .15s;';
+  btn.onclick = openMasterImagePanel;
+  masterBar.appendChild(btn);
+}
+
+
 /* ── Desligar listener ── */
 function detachChatListener(){
   if(chatListener&&firebaseOK&&salaId){
@@ -3837,6 +4059,44 @@ function detachChatListener(){
 
 </script>
 
+
+
+<!-- ══ PAINEL DE IMAGEM DO MESTRE ══ -->
+<div class="master-image-panel" id="master-image-panel">
+  <div class="master-image-inner">
+    <p class="master-image-title">✦ Enviar Imagem ao Jogador</p>
+    <img id="master-image-preview" class="master-image-preview" alt="Preview" />
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <label style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;color:rgba(201,149,42,.45);text-transform:uppercase;margin-bottom:4px;">Escolher imagem</label>
+      <label style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px;border:1px dashed rgba(201,149,42,.3);border-radius:4px;cursor:pointer;color:rgba(201,149,42,.6);font-family:'Cinzel',serif;font-size:11px;letter-spacing:1px;transition:border-color .2s;" id="master-img-upload-lbl">
+        📂 Escolher imagem do dispositivo
+        <input type="file" accept="image/*" id="master-img-file" style="display:none" onchange="previewMasterImage(event)">
+      </label>
+    </div>
+    <div id="master-img-caption-row" style="display:flex;flex-direction:column;gap:6px;display:none;">
+      <label style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;color:rgba(201,149,42,.45);text-transform:uppercase;">Legenda (opcional)</label>
+      <input type="text" id="master-img-caption" class="desc-inp" placeholder="Ex: Uma carta misteriosa..." maxlength="80" autocomplete="off">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      <label style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;color:rgba(201,149,42,.45);text-transform:uppercase;">Enviar para</label>
+      <select id="master-img-target" style="font-family:'Cinzel',serif;font-size:11px;background:rgba(20,12,4,.8);border:1px solid rgba(201,149,42,.25);color:rgba(201,149,42,.8);padding:7px 10px;border-radius:3px;outline:none;">
+        <option value="all">✦ Todos os jogadores</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button onclick="closeMasterImagePanel()" style="flex:1;font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;padding:10px;border:1px solid rgba(201,149,42,.25);background:transparent;color:rgba(201,149,42,.5);border-radius:3px;cursor:pointer;text-transform:uppercase;">Cancelar</button>
+      <button onclick="sendMasterImage()" id="master-img-send-btn" disabled style="flex:2;font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;padding:10px;border:1px solid rgba(201,149,42,.5);background:rgba(201,149,42,.15);color:var(--gold2);border-radius:3px;cursor:pointer;text-transform:uppercase;opacity:.5;">Enviar Imagem ✦</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ OVERLAY DE IMAGEM PARA JOGADORES ══ -->
+<div id="player-image-overlay">
+  <p class="poi-title" id="poi-title">✦ Revelação ✦</p>
+  <img id="poi-img" src="" alt="Imagem revelada" />
+  <p id="poi-caption" style="font-family:'Crimson Text',serif;font-size:14px;color:rgba(244,234,208,.65);text-align:center;max-width:400px;font-style:italic;display:none;"></p>
+  <button class="poi-close-btn" onclick="closePlayerImageOverlay()">✕ Fechar</button>
+</div>
 
 <!-- VTT GRID - React Component -->
 <script type="text/babel" data-presets="react">
@@ -4350,11 +4610,11 @@ function DrawingCanvas({ camera, width, height, brushColor, brushSize, onStart, 
   const drawing = useRef(false);
   const s2w = (e,rect) => ({ x:(e.clientX-rect.left-camera.x)/camera.scale, y:(e.clientY-rect.top-camera.y)/camera.scale });
   return (
-    <canvas width={width} height={height} style={{ position:"absolute",top:0,left:0,cursor:"crosshair",zIndex:5 }}
-      onMouseDown={(e)=>{ if(e.button!==0)return; drawing.current=true; onStart(s2w(e,e.currentTarget.getBoundingClientRect()),brushColor,brushSize); }}
-      onMouseMove={(e)=>{ if(!drawing.current)return; onExtend(s2w(e,e.currentTarget.getBoundingClientRect())); }}
-      onMouseUp={()=>{ drawing.current=false; onEnd(); }}
-      onMouseLeave={()=>{ if(drawing.current){ drawing.current=false; onEnd(); } }} />
+    <canvas width={width} height={height} style={{ position:"absolute",top:0,left:0,cursor:"crosshair",zIndex:5,touchAction:"none" }}
+      onMouseDown={(e)=>{ if(e.button!==0)return; e.preventDefault(); e.stopPropagation(); drawing.current=true; onStart(s2w(e,e.currentTarget.getBoundingClientRect()),brushColor,brushSize); }}
+      onMouseMove={(e)=>{ e.preventDefault(); if(!drawing.current)return; onExtend(s2w(e,e.currentTarget.getBoundingClientRect())); }}
+      onMouseUp={(e)=>{ e.preventDefault(); drawing.current=false; onEnd(); }}
+      onMouseLeave={(e)=>{ if(drawing.current){ drawing.current=false; onEnd(); } }} />
   );
 }
 
@@ -4395,7 +4655,7 @@ function FogPaintCanvas({ camera, cellSize, width, height, fogBrushCells, onPain
   const apply=(col,row,erase)=>{ erase ? onErase(brush(col,row)) : onPaint(brush(col,row)); };
   return (
     <canvas width={width} height={height} style={{ position:"absolute",top:0,left:0,cursor:"cell",zIndex:9 }}
-      onMouseDown={(e)=>{ e.preventDefault(); const r=e.currentTarget.getBoundingClientRect(); const {col,row}=toCell(e,r); if(e.button===2){erasing.current=true;apply(col,row,true);}else{painting.current=true;apply(col,row,false);} lastCell.current={col,row}; }}
+      onMouseDown={(e)=>{ e.preventDefault(); e.stopPropagation(); const r=e.currentTarget.getBoundingClientRect(); const {col,row}=toCell(e,r); if(e.button===2){erasing.current=true;apply(col,row,true);}else{painting.current=true;apply(col,row,false);} lastCell.current={col,row}; }}
       onMouseMove={(e)=>{ if(!painting.current&&!erasing.current)return; const r=e.currentTarget.getBoundingClientRect(); const {col,row}=toCell(e,r); if(lastCell.current?.col===col&&lastCell.current?.row===row)return; lastCell.current={col,row}; apply(col,row,erasing.current); }}
       onMouseUp={()=>{ painting.current=false; erasing.current=false; }}
       onMouseLeave={()=>{ painting.current=false; erasing.current=false; }}
@@ -4472,7 +4732,7 @@ function TokenLayer({ tokens, camera, cellSize, isGM, onUpdate, onRemove, active
   const sz = cellSize * camera.scale;
 
   return (
-    <div style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", pointerEvents:"none", zIndex:6 }}>
+    <div style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", pointerEvents: isGM && activeTool==="select" ? "auto" : "none", zIndex:6 }}>
       {tokens.map((tok) => {
         if (!isGM && tok.hidden) return null;
         const opacity = tok.hidden ? 0.4 : 1;
@@ -5018,6 +5278,16 @@ function GMToolbox({ activeTool, setActiveTool, brushColor, setBrushColor, brush
         <button onClick={onAddToken} style={{ padding:"5px 0",borderRadius:5,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(30,30,30,0.75)",color:"#e0ddd8",cursor:"pointer",fontSize:11,width:"100%" }}>🎭 Adicionar Token</button>
       </ToolSection>
 
+      {/* Imagem para Jogadores */}
+      <ToolSection label="Imagem ao Jogador" icon="🖼" defaultOpen={false}>
+        <div style={{ fontSize:10, color:"rgba(201,149,42,0.5)", lineHeight:1.6, marginBottom:4 }}>
+          Mostre uma imagem a todos os jogadores ou a um específico.
+        </div>
+        <button onClick={()=>{ if(typeof window.openMasterImagePanel==="function") window.openMasterImagePanel(); }} style={{ padding:"6px 0",borderRadius:5,border:"1px solid rgba(201,149,42,0.35)",background:"rgba(201,149,42,0.1)",color:"rgba(201,149,42,0.9)",cursor:"pointer",fontSize:11,width:"100%",fontFamily:"'Cinzel',serif",letterSpacing:"1px" }}>
+          🖼 Enviar Imagem
+        </button>
+      </ToolSection>
+
       {/* Marcadores de Área */}
       <ToolSection label="Área de Efeito" icon="💥" defaultOpen={false}>
         <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
@@ -5251,8 +5521,8 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
   }, []);
 
   const handleMouseDown = useCallback((e) => {
-    const capturing = permissions.canEdit && (activeTool==="draw"||activeTool==="fog") && e.button===0 && !isPanMode;
-    if(capturing) return;
+    // Se tool é draw ou fog, o DrawingCanvas/FogPaintCanvas já captura o evento
+    if(permissions.canEdit && (activeTool==="draw"||activeTool==="fog") && !isPanMode) return;
     cameraHandlers.onMouseDown(e);
   }, [isPanMode, activeTool, permissions.canEdit, cameraHandlers]);
 
@@ -5261,7 +5531,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
     if (isPanMode) {
       setCursorStyle("grab");
     } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog")) {
-      setCursorStyle("none");
+      setCursorStyle("crosshair");
     } else {
       setCursorStyle("default");
     }
@@ -5313,7 +5583,7 @@ function VTTGrid({ role="PLAYER", cellSize=CELL_SIZE_DEFAULT }) {
     } else if (permissions.isGM && measureActive) {
       setCursorStyle("crosshair");
     } else if (permissions.canEdit && (activeTool === "draw" || activeTool === "fog")) {
-      setCursorStyle("none");
+      setCursorStyle("crosshair");
     } else {
       setCursorStyle("default");
     }
